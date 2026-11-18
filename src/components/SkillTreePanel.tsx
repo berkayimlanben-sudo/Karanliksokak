@@ -12,7 +12,7 @@ import {
   OyunDurumu,
   yetenekAcilabilirMi,
 } from '../game/engine';
-import { sesCal } from '../game/sound';
+import { playSfx } from '../game/sound';
 
 interface SkillTreePanelProps {
   state: OyunDurumu;
@@ -167,7 +167,10 @@ export const SkillTreePanel: React.FC<SkillTreePanelProps> = ({
               role="tab"
               aria-selected={aktif}
               data-testid={`skill-branch-${dal.id}`}
-              onClick={() => setSeciliDal(dal.id)}
+              onClick={() => {
+                playSfx('menu_tik');
+                setSeciliDal(dal.id);
+              }}
               className={`min-h-[48px] px-3 py-2 border text-left transition-colors cursor-pointer relative ${
                 aktif
                   ? 'bg-[#181F30] text-[#EAECEF]'
@@ -328,7 +331,7 @@ export const SkillTreePanel: React.FC<SkillTreePanelProps> = ({
                         type="button"
                         data-testid={`unlock-skill-${dugum.id}`}
                         onClick={() => {
-                          sesCal('mukemmel');
+                          playSfx('yetenek_ac');
                           onYetenekAc(dugum.id);
                         }}
                         className="min-h-[42px] px-4 py-2 text-xs font-bold bg-[#D99B38] hover:bg-[#E5AC4E] text-[#0B0E17] transition-colors cursor-pointer whitespace-nowrap"

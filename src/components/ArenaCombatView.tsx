@@ -1,10 +1,11 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Shield, Swords, Volume2, VolumeX, Zap } from 'lucide-react';
+import { Shield, Swords, Zap } from 'lucide-react';
 import { HAMLE_LISTESI, RakipTanimi } from '../data/gameData';
 import { dovusAdimi, dovusBaslat, DovusDurumu, oyuncuHamleSec } from '../game/combat';
 import { MacSonucOzeti, OyunDurumu } from '../game/engine';
-import { sesAcikMi, sesCal, sesTercihiDegistir, titresimTetikle } from '../game/sound';
+import { playSfx, titresimTetikle } from '../game/sound';
 import { ArenaCombatCanvas } from './ArenaCombatCanvas';
+import { AudioControls } from './AudioControls';
 
 interface ArenaCombatViewProps {
   oyun: OyunDurumu;
@@ -40,7 +41,6 @@ export const ArenaCombatView: React.FC<ArenaCombatViewProps> = ({
   const [gorunum, setGorunum] = useState<DovusDurumu>(() => dovusBaslat(oyun, rakip));
   const dovusRef = useRef<DovusDurumu>(gorunum);
   const [sonucOzeti, setSonucOzeti] = useState<MacSonucOzeti | null>(null);
-  const [sesAcik, setSesAcik] = useState<boolean>(() => sesAcikMi());
   const sonucIslendiRef = useRef(false);
   const onMacBittiRef = useRef(onMacBitti);
   const sonIslenenSayiIdRef = useRef(0);
@@ -52,7 +52,7 @@ export const ArenaCombatView: React.FC<ArenaCombatViewProps> = ({
 
   // Maç başlangıç gong sesi
   useEffect(() => {
-    sesCal('gong');
+    playSfx('gong');
   }, []);
 
   const efektleriIsle = useCallback((durum: DovusDurumu) => {
@@ -62,31 +62,35 @@ export const ArenaCombatView: React.FC<ArenaCombatViewProps> = ({
       sonIslenenSayiIdRef.current = s.id;
       switch (s.efekt) {
         case 'mukemmel':
-          sesCal('mukemmel');
+          playSfx('mukemmel');
           titresimTetikle(32);
           break;
         case 'kombo':
-          sesCal('kombo');
+          playSfx('kombo');
           titresimTetikle(35);
           break;
         case 'sert_yumruk':
-          sesCal('sert_yumruk');
+          playSfx('sert_vurus', { volume: 1 });
           titresimTetikle(35);
           break;
+        case 'tekme':
+          playSfx('tekme', { volume: 0.92 });
+          titresimTetikle(26);
+          break;
         case 'blok':
-          sesCal('blok');
+          playSfx('blok');
           titresimTetikle(22);
           break;
         case 'kacinma':
-          sesCal('kacinma');
+          playSfx('kacinma');
           titresimTetikle(20);
           break;
         case 'yumruk':
-          sesCal('yumruk');
+          playSfx('yumruk', { volume: 0.85 });
           titresimTetikle(22);
           break;
         case 'nakavt':
-          sesCal('nakavt');
+          playSfx('nakavt');
           titresimTetikle(45);
           nakavtCaldi = true;
           break;
@@ -95,19 +99,11 @@ export const ArenaCombatView: React.FC<ArenaCombatViewProps> = ({
 
     if (oncekiDurumRef.current !== 'ko_yavaslatma' && durum.durum === 'ko_yavaslatma') {
       if (!nakavtCaldi) {
-        sesCal('nakavt');
+        playSfx('nakavt');
         titresimTetikle(45);
       }
     }
     oncekiDurumRef.current = durum.durum;
-  }, []);
-
-  const handleSesDegistir = useCallback(() => {
-    const yeni = sesTercihiDegistir();
-    setSesAcik(yeni);
-    if (yeni) {
-      sesCal('tik');
-    }
   }, []);
 
   const hamleTetikle = useCallback((hamleId: string) => {
@@ -119,13 +115,13 @@ export const ArenaCombatView: React.FC<ArenaCombatViewProps> = ({
 
     const hamle = HAMLE_HARITASI.get(hamleId);
     if ((hamle?.staminaToparlanma ?? 0) > 0) {
-      sesCal('blok');
+      playSfx('blok');
       titresimTetikle(20);
     } else if (hamle?.tur === 'kacinma') {
-      sesCal('kacinma');
+      playSfx('kacinma');
       titresimTetikle(20);
     } else {
-      sesCal('tik');
+      playSfx('menu_tik');
     }
   }, []);
 
@@ -160,6 +156,7 @@ export const ArenaCombatView: React.FC<ArenaCombatViewProps> = ({
 
         if (sonraki.durum === 'bitti' && sonraki.kazanan && !sonucIslendiRef.current) {
           sonucIslendiRef.current = true;
+          playSfx(sonraki.kazanan === 'oyuncu' ? 'mac_kazanma' : 'mac_kaybetme');
           const ozet = onMacBittiRef.current(sonraki.kazanan);
           setSonucOzeti(ozet);
           setGorunum(sonraki);
@@ -222,20 +219,7 @@ export const ArenaCombatView: React.FC<ArenaCombatViewProps> = ({
             <span data-testid="opponent-hp" className="text-[#8B95AB]">
               Rakip: {Math.ceil(rakipDurum.can)}/{rakipDurum.maksCan}
             </span>
-            <button
-              type="button"
-              data-testid="sound-toggle-btn"
-              onClick={handleSesDegistir}
-              aria-label={sesAcik ? 'Sesi Kapat' : 'Sesi Aç'}
-              title={sesAcik ? 'Ses Açık' : 'Ses Kapalı'}
-              className="min-h-[34px] min-w-[34px] inline-flex items-center justify-center border border-[#273147] bg-[#121724] hover:border-[#3A4766] text-[#EAECEF] transition-colors cursor-pointer"
-            >
-              {sesAcik ? (
-                <Volume2 className="w-4 h-4 text-[#D99B38]" />
-              ) : (
-                <VolumeX className="w-4 h-4 text-[#8B95AB]" />
-              )}
-            </button>
+            <AudioControls compact />
           </div>
         </header>
 
@@ -354,7 +338,10 @@ export const ArenaCombatView: React.FC<ArenaCombatViewProps> = ({
               <button
                 type="button"
                 data-testid="exit-arena-btn"
-                onClick={onArenadanCik}
+                onClick={() => {
+                  playSfx('menu_tik');
+                  onArenadanCik();
+                }}
                 className="min-h-[44px] px-6 py-2.5 bg-[#D63838] hover:bg-[#E34A4A] text-white font-display text-lg font-bold tracking-wide transition-colors cursor-pointer"
               >
                 Arenadan Çık

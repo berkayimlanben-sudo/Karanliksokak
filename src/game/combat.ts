@@ -46,6 +46,7 @@ export interface YuzenSayi {
   ofsetY?: number;
   efekt?:
     | 'yumruk'
+    | 'tekme'
     | 'sert_yumruk'
     | 'blok'
     | 'kacinma'
@@ -764,7 +765,9 @@ function saldiriCoz(
         ? 'blok'
         : hamle.temelHasar >= 20 || karsiAktif
           ? 'sert_yumruk'
-          : 'yumruk';
+          : hamle.tur === 'tekme'
+            ? 'tekme'
+            : 'yumruk';
 
   const yeniSayilar: YuzenSayi[] = [
     {

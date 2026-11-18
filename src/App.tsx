@@ -29,9 +29,11 @@ import {
   yetenekAc,
 } from './game/engine';
 import { MekanId, temaDegiskenleriniUygula } from './game/theme';
+import { getSesAyarlari, mute, MuzikRuhHali, playMusic, playSfx } from './game/sound';
 import { TitleScreen } from './components/TitleScreen';
 import { HomeHub } from './components/HomeHub';
 import { ArenaCombatView } from './components/ArenaCombatView';
+import { AudioDebugPanel } from './components/AudioDebugPanel';
 
 /**
  * ============================================================================
@@ -59,6 +61,24 @@ export default function App() {
     temaDegiskenleriniUygula();
   }, []);
 
+  // Global [M] tuşu ile master mute aç/kapat
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== 'm' && e.key !== 'M') return;
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      const aktif = document.activeElement?.tagName;
+      if (aktif === 'INPUT' || aktif === 'TEXTAREA' || aktif === 'SELECT') return;
+      e.preventDefault();
+      const yeniKapali = !getSesAyarlari().masterMute;
+      mute('master', yeniKapali);
+      if (!yeniKapali) {
+        playSfx('menu_tik');
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, []);
+
   // Oyun durumunu document.body.dataset.state üzerine yansıt
   useEffect(() => {
     document.body.dataset.state = !oyunDurumu
@@ -67,6 +87,21 @@ export default function App() {
         ? 'fighting'
         : 'playing';
   }, [oyunDurumu, aktifRakip]);
+
+  // Aktif ekran ve mekana göre müzik ruh halini 1.5 sn crossfade ile güncelle
+  const aktifMuzikRuhHali: MuzikRuhHali = !oyunDurumu
+    ? 'sakin'
+    : aktifRakip
+      ? 'gergin'
+      : oyunDurumu.aktifMekan === 'spor_salonu'
+        ? 'enerjik'
+        : oyunDurumu.aktifMekan === 'sokak_arena'
+          ? 'gergin'
+          : 'sakin';
+
+  useEffect(() => {
+    playMusic(aktifMuzikRuhHali);
+  }, [aktifMuzikRuhHali]);
 
   // Her değişiklikte otomatik kaydet
   useEffect(() => {
@@ -139,28 +174,20 @@ export default function App() {
     setAktifRakip(null);
   }, []);
 
-  if (!oyunDurumu) {
-    return (
-      <TitleScreen
-        kayitliOyun={kayitliOyun}
-        onDevamEt={handleDevamEt}
-        onYeniBaslat={handleYeniBaslat}
-      />
-    );
-  }
-
-  if (aktifRakip) {
-    return (
-      <ArenaCombatView
-        oyun={oyunDurumu}
-        rakip={aktifRakip}
-        onMacBitti={handleMacBitti}
-        onArenadanCik={handleArenadanCik}
-      />
-    );
-  }
-
-  return (
+  const aktifEkran = !oyunDurumu ? (
+    <TitleScreen
+      kayitliOyun={kayitliOyun}
+      onDevamEt={handleDevamEt}
+      onYeniBaslat={handleYeniBaslat}
+    />
+  ) : aktifRakip ? (
+    <ArenaCombatView
+      oyun={oyunDurumu}
+      rakip={aktifRakip}
+      onMacBitti={handleMacBitti}
+      onArenadanCik={handleArenadanCik}
+    />
+  ) : (
     <HomeHub
       state={oyunDurumu}
       onMekanaGit={(hedefMekan: MekanId) =>
@@ -199,5 +226,12 @@ export default function App() {
       onMacaBasla={handleMacaBasla}
       onSifirla={handleSifirla}
     />
+  );
+
+  return (
+    <>
+      {aktifEkran}
+      <AudioDebugPanel />
+    </>
   );
 }

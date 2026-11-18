@@ -40,13 +40,14 @@ import {
   RingTavri,
   saatMetni,
 } from '../game/engine';
-import { sesCal } from '../game/sound';
+import { playSfx } from '../game/sound';
 import { MekanId } from '../game/theme';
 import { NeighborhoodCanvas } from './NeighborhoodCanvas';
 import { MovesPanel } from './MovesPanel';
 import { SkillTreePanel } from './SkillTreePanel';
 import { ReputationPanel } from './ReputationPanel';
 import { EventModal } from './EventModal';
+import { AudioControls } from './AudioControls';
 
 interface HomeHubProps {
   state: OyunDurumu;
@@ -122,12 +123,36 @@ export const HomeHub: React.FC<HomeHubProps> = ({
   const [sonAksiyonTuru, setSonAksiyonTuru] = useState<StatId>('guc');
   const [sifirlamaOnayi, setSifirlamaOnayi] = useState(false);
   const sagPanelRef = useRef<HTMLElement | null>(null);
+  const prevParaRef = useRef(state.para);
+  const prevGunRef = useRef(state.gun);
+  const prevKiraUyariRef = useRef(state.kiraUyariSayisi);
 
   useEffect(() => {
     sagPanelRef.current?.scrollTo({ top: 0 });
   }, [state.aktifMekan, sagGorunum]);
 
   const turetilmis = useMemo(() => hesaplaTuretilmisDegerler(state), [state]);
+
+  useEffect(() => {
+    if (state.para > prevParaRef.current) {
+      playSfx('para_kazanma');
+    }
+    if (state.gun > prevGunRef.current) {
+      const kiraUyariTetiklendi =
+        state.kiraUyariSayisi > prevKiraUyariRef.current ||
+        (turetilmis.kirayaKalanGun <= 2 && turetilmis.kiraEksikTutar > 0);
+      playSfx(kiraUyariTetiklendi ? 'kira_uyarisi' : 'gun_sonu');
+    }
+    prevParaRef.current = state.para;
+    prevGunRef.current = state.gun;
+    prevKiraUyariRef.current = state.kiraUyariSayisi;
+  }, [
+    state.para,
+    state.gun,
+    state.kiraUyariSayisi,
+    turetilmis.kirayaKalanGun,
+    turetilmis.kiraEksikTutar,
+  ]);
   const aktifDebufflar = useMemo(() => aktifDebufflariGetir(state), [state]);
   const aileRuhHali = useMemo(() => aileRuhHaliGetir(state), [state]);
   const { mevcutEv, sonrakiEv } = turetilmis;
@@ -172,6 +197,7 @@ export const HomeHub: React.FC<HomeHubProps> = ({
     ) {
       setSonAksiyonTuru(statId);
       setAksiyonDarbesi((v) => v + 1);
+      playSfx('menu_tik');
     }
     onAntrenman(statId, ucretsizEv ? { ucretsizEv: true } : undefined);
   };
@@ -181,7 +207,7 @@ export const HomeHub: React.FC<HomeHubProps> = ({
     if (!aktifOlayEngeli && kontrol.alinabilir) {
       setSonAksiyonTuru(antrenorId === 'hoca_muslum' ? 'guc' : 'refleks');
       setAksiyonDarbesi((v) => v + 1);
-      sesCal('mukemmel');
+      playSfx('yetenek_ac');
     }
     onHocaDersiAl(dersId);
   };
@@ -190,8 +216,24 @@ export const HomeHub: React.FC<HomeHubProps> = ({
     if (!aktifOlayEngeli && state.enerji >= 14) {
       setSonAksiyonTuru('ceviklik');
       setAksiyonDarbesi((v) => v + 1);
+      playSfx('menu_tik');
     }
     onSokakGolgeBoksu();
+  };
+
+  const mekanSec = (hedefMekan: MekanId) => {
+    if (hedefMekan !== state.aktifMekan) {
+      playSfx('mekan_gecis');
+    } else {
+      playSfx('menu_tik');
+    }
+    setSagGorunum('mekan');
+    onMekanaGit(hedefMekan);
+  };
+
+  const gorunumAcKapa = (hedef: 'itibar' | 'yetenek_agaci' | 'hamleler') => {
+    playSfx('menu_tik');
+    setSagGorunum((v) => (v === hedef ? 'mekan' : hedef));
   };
 
   const acilCorbaMusait =
@@ -286,7 +328,10 @@ export const HomeHub: React.FC<HomeHubProps> = ({
                   <button
                     type="button"
                     data-testid={`neighbor-talk-${komsu.id}`}
-                    onClick={() => onKomsuEtkiles(komsu.id)}
+                    onClick={() => {
+                      playSfx('menu_tik');
+                      onKomsuEtkiles(komsu.id);
+                    }}
                     className="min-h-[42px] w-full px-3 py-2 text-xs font-bold bg-[#D99B38] hover:bg-[#E5AC4E] text-[#0B0E17] transition-colors cursor-pointer text-left flex items-center justify-between gap-2"
                   >
                     <span className="truncate">Görüş: {olay.baslik}</span>
@@ -350,28 +395,31 @@ export const HomeHub: React.FC<HomeHubProps> = ({
               </div>
             </div>
 
-            <div className="text-right shrink-0">
-              <p
-                data-testid="money-display"
-                className="font-mono-tabular text-base sm:text-2xl font-bold text-[#EAECEF] leading-tight"
-              >
-                {state.para} ₺
-              </p>
-              <p
-                className={`font-mono-tabular text-[11px] sm:text-xs mt-0.5 ${
-                  turetilmis.kirayaKalanGun <= 2 && turetilmis.kiraEksikTutar > 0
-                    ? 'text-[#E34A4A] font-semibold'
-                    : 'text-[#D99B38]'
-                }`}
-              >
-                {turetilmis.kirayaKalanGun === 1
-                  ? 'Bugün Kira'
-                  : `Kira ${turetilmis.kirayaKalanGun}g`}{' '}
-                ·{' '}
-                {turetilmis.kiraEksikTutar > 0
-                  ? `Eksik ${turetilmis.kiraEksikTutar} ₺`
-                  : 'Hazır'}
-              </p>
+            <div className="flex items-start gap-2.5 shrink-0">
+              <div className="text-right">
+                <p
+                  data-testid="money-display"
+                  className="font-mono-tabular text-base sm:text-2xl font-bold text-[#EAECEF] leading-tight"
+                >
+                  {state.para} ₺
+                </p>
+                <p
+                  className={`font-mono-tabular text-[11px] sm:text-xs mt-0.5 ${
+                    turetilmis.kirayaKalanGun <= 2 && turetilmis.kiraEksikTutar > 0
+                      ? 'text-[#E34A4A] font-semibold'
+                      : 'text-[#D99B38]'
+                  }`}
+                >
+                  {turetilmis.kirayaKalanGun === 1
+                    ? 'Bugün Kira'
+                    : `Kira ${turetilmis.kirayaKalanGun}g`}{' '}
+                  ·{' '}
+                  {turetilmis.kiraEksikTutar > 0
+                    ? `Eksik ${turetilmis.kiraEksikTutar} ₺`
+                    : 'Hazır'}
+                </p>
+              </div>
+              <AudioControls compact />
             </div>
           </div>
         </div>
@@ -473,10 +521,7 @@ export const HomeHub: React.FC<HomeHubProps> = ({
                 key={mekan.id}
                 type="button"
                 data-location={mekan.id}
-                onClick={() => {
-                  setSagGorunum('mekan');
-                  onMekanaGit(mekan.id);
-                }}
+                onClick={() => mekanSec(mekan.id)}
                 className={`relative min-h-[44px] px-1 py-1.5 flex flex-col items-center justify-center gap-0.5 text-[10px] font-semibold border-b-2 transition-colors cursor-pointer ${
                   aktif
                     ? 'border-[#D63838] text-[#EAECEF] bg-[#181F30]'
@@ -675,10 +720,7 @@ export const HomeHub: React.FC<HomeHubProps> = ({
                   key={mekan.id}
                   type="button"
                   data-location={mekan.id}
-                  onClick={() => {
-                    setSagGorunum('mekan');
-                    onMekanaGit(mekan.id);
-                  }}
+                  onClick={() => mekanSec(mekan.id)}
                   className={`min-h-[44px] px-2 xl:px-2.5 inline-flex items-center gap-1.5 text-xs font-semibold border-b-2 cursor-pointer whitespace-nowrap shrink-0 ${
                     aktif
                       ? 'border-[#D63838] text-[#EAECEF] bg-[#181F30]'
@@ -704,7 +746,7 @@ export const HomeHub: React.FC<HomeHubProps> = ({
             <button
               type="button"
               data-testid="nav-reputation-btn"
-              onClick={() => setSagGorunum((v) => (v === 'itibar' ? 'mekan' : 'itibar'))}
+              onClick={() => gorunumAcKapa('itibar')}
               className={`min-h-[32px] px-2 text-xs font-semibold border transition-colors cursor-pointer whitespace-nowrap inline-flex items-center gap-1 ${
                 sagGorunum === 'itibar'
                   ? 'border-[#6CC296] bg-[#12221D] text-[#EAECEF]'
@@ -724,9 +766,7 @@ export const HomeHub: React.FC<HomeHubProps> = ({
             <button
               type="button"
               data-testid="nav-skill-tree-btn"
-              onClick={() =>
-                setSagGorunum((v) => (v === 'yetenek_agaci' ? 'mekan' : 'yetenek_agaci'))
-              }
+              onClick={() => gorunumAcKapa('yetenek_agaci')}
               className={`min-h-[32px] px-2 text-xs font-semibold border transition-colors cursor-pointer whitespace-nowrap inline-flex items-center gap-1 ${
                 sagGorunum === 'yetenek_agaci'
                   ? 'border-[#D99B38] bg-[#221D15] text-[#EAECEF]'
@@ -742,7 +782,7 @@ export const HomeHub: React.FC<HomeHubProps> = ({
             <button
               type="button"
               data-testid="nav-moves-btn"
-              onClick={() => setSagGorunum((v) => (v === 'hamleler' ? 'mekan' : 'hamleler'))}
+              onClick={() => gorunumAcKapa('hamleler')}
               className={`min-h-[32px] px-2 text-xs font-semibold border transition-colors cursor-pointer whitespace-nowrap ${
                 sagGorunum === 'hamleler'
                   ? 'border-[#D63838] bg-[#181F30] text-[#EAECEF]'
@@ -849,7 +889,7 @@ export const HomeHub: React.FC<HomeHubProps> = ({
               <button
                 type="button"
                 data-testid="mobile-reputation-btn"
-                onClick={() => setSagGorunum((v) => (v === 'itibar' ? 'mekan' : 'itibar'))}
+                onClick={() => gorunumAcKapa('itibar')}
                 className={`lg:hidden border px-2.5 py-1 font-sans font-semibold cursor-pointer ${
                   sagGorunum === 'itibar'
                     ? 'border-[#6CC296] bg-[#12221D] text-[#EAECEF]'
@@ -863,9 +903,7 @@ export const HomeHub: React.FC<HomeHubProps> = ({
               <button
                 type="button"
                 data-testid="mobile-skill-tree-btn"
-                onClick={() =>
-                  setSagGorunum((v) => (v === 'yetenek_agaci' ? 'mekan' : 'yetenek_agaci'))
-                }
+                onClick={() => gorunumAcKapa('yetenek_agaci')}
                 className={`lg:hidden border px-2.5 py-1 font-sans font-semibold cursor-pointer ${
                   sagGorunum === 'yetenek_agaci'
                     ? 'border-[#D99B38] bg-[#221D15] text-[#EAECEF]'
@@ -879,7 +917,7 @@ export const HomeHub: React.FC<HomeHubProps> = ({
               <button
                 type="button"
                 data-testid="mobile-moves-btn"
-                onClick={() => setSagGorunum((v) => (v === 'hamleler' ? 'mekan' : 'hamleler'))}
+                onClick={() => gorunumAcKapa('hamleler')}
                 className={`lg:hidden border px-2.5 py-1 font-sans font-semibold cursor-pointer ${
                   sagGorunum === 'hamleler'
                     ? 'border-[#D63838] bg-[#221417] text-[#EAECEF]'
@@ -931,7 +969,10 @@ export const HomeHub: React.FC<HomeHubProps> = ({
 
                     <button
                       type="button"
-                      onClick={() => onYemek('ev_yemegi')}
+                      onClick={() => {
+                        playSfx('menu_tik');
+                        onYemek('ev_yemegi');
+                      }}
                       disabled={state.buzdolabiStok <= 0}
                       className={`min-h-[52px] px-4 py-3 border text-left flex items-center justify-between gap-3 transition-colors ${
                         state.buzdolabiStok > 0
@@ -964,7 +1005,10 @@ export const HomeHub: React.FC<HomeHubProps> = ({
                       </div>
                       <button
                         type="button"
-                        onClick={onAcilCorba}
+                        onClick={() => {
+                          playSfx('menu_tik');
+                          onAcilCorba();
+                        }}
                         className="min-h-[42px] px-4 py-2 bg-[#3D8C66] hover:bg-[#4AA378] text-white text-xs font-semibold whitespace-nowrap shrink-0 cursor-pointer"
                       >
                         Sıcak Çorba İç (Ücretsiz · +38 Tokluk)
@@ -1061,9 +1105,10 @@ export const HomeHub: React.FC<HomeHubProps> = ({
                             <button
                               type="button"
                               disabled={konusulduMu}
-                              onClick={() =>
-                                onAileEtkiles(isEmine ? 'anne_emine' : 'kardes_elif')
-                              }
+                              onClick={() => {
+                                playSfx('menu_tik');
+                                onAileEtkiles(isEmine ? 'anne_emine' : 'kardes_elif');
+                              }}
                               className={`min-h-[40px] px-3 py-1.5 text-xs font-semibold border transition-colors ${
                                 konusulduMu
                                   ? 'border-[#273147] bg-[#0D1019] text-[#5B657A] cursor-not-allowed'
@@ -1110,7 +1155,10 @@ export const HomeHub: React.FC<HomeHubProps> = ({
                         type="button"
                         data-testid="neighbor-solidarity-btn"
                         disabled={(state.komsuDayanismaGunu ?? 0) === state.gun}
-                        onClick={onKomsuDayanisma}
+                        onClick={() => {
+                          playSfx('menu_tik');
+                          onKomsuDayanisma();
+                        }}
                         className={`min-h-[40px] px-3.5 py-2 text-xs font-semibold whitespace-nowrap shrink-0 transition-colors ${
                           (state.komsuDayanismaGunu ?? 0) === state.gun
                             ? 'border border-[#273147] bg-[#0D1019] text-[#5B657A] cursor-not-allowed'
@@ -1167,7 +1215,10 @@ export const HomeHub: React.FC<HomeHubProps> = ({
                             <button
                               type="button"
                               disabled={sahip || !paraYeterli || !yerVar}
-                              onClick={() => onEvEsyasiAl(esya.id)}
+                              onClick={() => {
+                                playSfx('menu_tik');
+                                onEvEsyasiAl(esya.id);
+                              }}
                               className={`min-h-[40px] px-3 py-1.5 text-xs font-semibold border transition-colors ${
                                 sahip
                                   ? 'border-[#3D8C66]/50 bg-[#12221D] text-[#6CC296] cursor-default'
@@ -1213,7 +1264,10 @@ export const HomeHub: React.FC<HomeHubProps> = ({
                         </div>
                         <button
                           type="button"
-                          onClick={onEvYukselt}
+                          onClick={() => {
+                            playSfx('menu_tik');
+                            onEvYukselt();
+                          }}
                           disabled={state.para < sonrakiEv.yukseltmeMaliyeti}
                           className={`min-h-[40px] px-4 py-1.5 text-xs font-semibold whitespace-nowrap transition-colors ${
                             state.para >= sonrakiEv.yukseltmeMaliyeti
@@ -1491,7 +1545,10 @@ export const HomeHub: React.FC<HomeHubProps> = ({
                           <button
                             type="button"
                             data-testid={`market-buy-${urun.id}`}
-                            onClick={() => onYemek(urun.id)}
+                            onClick={() => {
+                              playSfx('menu_tik');
+                              onYemek(urun.id);
+                            }}
                             disabled={!paraYeterli}
                             className={`min-h-[42px] w-full px-3 py-2 text-xs font-semibold border transition-colors ${
                               paraYeterli
@@ -1627,7 +1684,10 @@ export const HomeHub: React.FC<HomeHubProps> = ({
                         <button
                           type="button"
                           data-shift={is.id}
-                          onClick={() => onVardiya(is.id)}
+                          onClick={() => {
+                            playSfx('menu_tik');
+                            onVardiya(is.id);
+                          }}
                           disabled={!tiklanabilir}
                           className={`min-h-[42px] w-full px-3 py-2 text-xs font-semibold border transition-colors ${
                             tiklanabilir
@@ -1699,14 +1759,14 @@ export const HomeHub: React.FC<HomeHubProps> = ({
                       <div className="flex items-center gap-2">
                         <button
                           type="button"
-                          onClick={() => setSagGorunum('yetenek_agaci')}
+                          onClick={() => gorunumAcKapa('yetenek_agaci')}
                           className="min-h-[36px] px-3 py-1.5 text-xs font-semibold border border-[#D99B38]/60 bg-[#1D170E] hover:border-[#D99B38] text-[#D99B38] whitespace-nowrap cursor-pointer"
                         >
                           Yetenek Ağacı ({turetilmis.yetenekPuani} YP)
                         </button>
                         <button
                           type="button"
-                          onClick={() => setSagGorunum('hamleler')}
+                          onClick={() => gorunumAcKapa('hamleler')}
                           className="min-h-[36px] px-3 py-1.5 text-xs font-semibold border border-[#3A4766] bg-[#181F30] hover:border-[#D63838] text-[#EAECEF] whitespace-nowrap cursor-pointer"
                         >
                           Hamleler ({turetilmis.acikHamleIds.length})
@@ -1736,7 +1796,10 @@ export const HomeHub: React.FC<HomeHubProps> = ({
                               key={sec.id}
                               type="button"
                               data-testid={`ring-stance-${sec.id}`}
-                              onClick={() => onRingTavriDegistir(sec.id)}
+                              onClick={() => {
+                                playSfx('menu_tik');
+                                onRingTavriDegistir(sec.id);
+                              }}
                               className={`min-h-[34px] px-2.5 py-1 text-[11px] font-semibold border transition-colors cursor-pointer ${
                                 aktif
                                   ? sec.id === 'temiz'
@@ -1827,7 +1890,10 @@ export const HomeHub: React.FC<HomeHubProps> = ({
                                     type="button"
                                     data-fight={rakip.id}
                                     disabled={!hazirlik.uygun}
-                                    onClick={() => onMacaBasla(rakip.id)}
+                                    onClick={() => {
+                                      playSfx('menu_tik');
+                                      onMacaBasla(rakip.id);
+                                    }}
                                     className={`min-h-[42px] w-full px-3 py-2 text-xs font-semibold border transition-colors ${
                                       hazirlik.uygun
                                         ? 'border-[#D63838] bg-[#D63838] hover:bg-[#E34A4A] text-white cursor-pointer'
@@ -1877,7 +1943,10 @@ export const HomeHub: React.FC<HomeHubProps> = ({
               {!sifirlamaOnayi ? (
                 <button
                   type="button"
-                  onClick={() => setSifirlamaOnayi(true)}
+                  onClick={() => {
+                    playSfx('menu_tik');
+                    setSifirlamaOnayi(true);
+                  }}
                   className="inline-flex items-center gap-1.5 text-[11px] font-medium text-[#8B95AB] hover:text-[#EAECEF] cursor-pointer"
                 >
                   <RotateCcw className="w-3 h-3" />
@@ -1889,6 +1958,7 @@ export const HomeHub: React.FC<HomeHubProps> = ({
                   <button
                     type="button"
                     onClick={() => {
+                      playSfx('menu_tik');
                       setSifirlamaOnayi(false);
                       onSifirla();
                     }}
@@ -1898,7 +1968,10 @@ export const HomeHub: React.FC<HomeHubProps> = ({
                   </button>
                   <button
                     type="button"
-                    onClick={() => setSifirlamaOnayi(false)}
+                    onClick={() => {
+                      playSfx('menu_tik');
+                      setSifirlamaOnayi(false);
+                    }}
                     className="px-2.5 py-1 text-[11px] border border-[#3A4766] bg-[#181F30] text-[#EAECEF] cursor-pointer"
                   >
                     Vazgeç

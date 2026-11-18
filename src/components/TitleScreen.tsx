@@ -1,8 +1,15 @@
 import React, { useEffect, useState } from 'react';
-import { RefreshCw, ArrowRight } from 'lucide-react';
+import { RefreshCw, ArrowRight, Volume2 } from 'lucide-react';
 import { KARAKTER_SABITLERI } from '../data/gameData';
 import { OyunDurumu, rastgeleLakapSec } from '../game/engine';
 import { TEMA } from '../game/theme';
+import {
+  initAudio,
+  playSfx,
+  sesKilidiBekliyorMu,
+  subscribeSesKilidi,
+} from '../game/sound';
+import { AudioControls } from './AudioControls';
 import { NeighborhoodCanvas } from './NeighborhoodCanvas';
 
 interface TitleScreenProps {
@@ -24,8 +31,15 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
 }) => {
   const [lakap, setLakap] = useState('');
   const [yeniModu, setYeniModu] = useState(!kayitliOyun);
+  const [sesBekliyor, setSesBekliyor] = useState(() => sesKilidiBekliyorMu());
+
+  useEffect(() => {
+    setSesBekliyor(sesKilidiBekliyorMu());
+    return subscribeSesKilidi(setSesBekliyor);
+  }, []);
 
   const onerilenLakapGetir = () => {
+    playSfx('menu_tik');
     const havuz = KARAKTER_SABITLERI.onerilenLakaplar.filter((l) => l !== lakap);
     const secilen = havuz[Math.floor(Math.random() * havuz.length)] ?? rastgeleLakapSec();
     setLakap(secilen);
@@ -57,6 +71,23 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
 
   return (
     <main className="relative min-h-screen w-full overflow-x-hidden flex flex-col justify-between bg-[#0B0E17] text-[#EAECEF]">
+      {/* Sağ Üst Ses Kontrolü */}
+      <div className="absolute top-3 right-3 sm:top-4 sm:right-4 z-30 flex flex-wrap items-center justify-end gap-2">
+        {sesBekliyor && (
+          <button
+            type="button"
+            onClick={() => {
+              initAudio();
+              playSfx('menu_tik');
+            }}
+            className="inline-flex items-center gap-1.5 border border-[#3A4766] bg-[#121724]/95 hover:bg-[#181F30] px-2.5 py-1.5 text-[11px] sm:text-xs font-medium text-[#EAECEF] transition-colors cursor-pointer"
+          >
+            <Volume2 className="w-3.5 h-3.5 text-[#D63838]" />
+            <span>Ses için dokun ve başla</span>
+          </button>
+        )}
+        <AudioControls compact />
+      </div>
       {/* Arka plan (Masaüstü) / Üst Sahne Şeridi (Mobil): Diegetik 2D gece mahalle sahnesi */}
       <div className="relative h-44 sm:h-52 md:h-auto md:absolute md:inset-0 pointer-events-none shrink-0">
         <NeighborhoodCanvas
@@ -187,7 +218,10 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
               <button
                 type="button"
                 data-start="true"
-                onClick={onDevamEt}
+                onClick={() => {
+                  playSfx('menu_tik');
+                  onDevamEt();
+                }}
                 className="min-h-[46px] md:min-h-[48px] flex-1 inline-flex items-center justify-center gap-2 bg-[#D63838] hover:bg-[#E34A4A] text-white font-display text-lg font-bold tracking-wider px-5 py-2.5 transition-colors cursor-pointer whitespace-nowrap"
               >
                 <span>Kaldığın Yerden Devam Et</span>
@@ -195,7 +229,10 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
               </button>
               <button
                 type="button"
-                onClick={() => setYeniModu(true)}
+                onClick={() => {
+                  playSfx('menu_tik');
+                  setYeniModu(true);
+                }}
                 className="min-h-[44px] md:min-h-[48px] inline-flex items-center justify-center border border-[#3A4766] bg-[#181F30] hover:bg-[#222B42] text-[#EAECEF] text-sm font-medium px-5 py-2.5 transition-colors cursor-pointer whitespace-nowrap"
               >
                 Yeni Başlangıç
@@ -206,6 +243,7 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
           <form
             onSubmit={(e) => {
               e.preventDefault();
+              playSfx('menu_tik');
               onYeniBaslat(lakap);
             }}
             className="border border-[#273147] bg-[#121724]/95 p-4 md:p-6 space-y-3 md:space-y-4"
@@ -254,7 +292,10 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
               {kayitliOyun && (
                 <button
                   type="button"
-                  onClick={() => setYeniModu(false)}
+                  onClick={() => {
+                    playSfx('menu_tik');
+                    setYeniModu(false);
+                  }}
                   className="min-h-[44px] md:min-h-[48px] inline-flex items-center justify-center border border-[#3A4766] bg-[#181F30] hover:bg-[#222B42] text-[#EAECEF] text-sm font-medium px-5 py-2.5 transition-colors cursor-pointer whitespace-nowrap"
                 >
                   Vazgeç

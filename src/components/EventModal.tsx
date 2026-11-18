@@ -6,6 +6,7 @@ import {
   KomsuOlaySecenegi,
 } from '../data/gameData';
 import { EtkiRozeti, metinSablonunuDoldur, olayEtkisiRozetleri, OyunDurumu } from '../game/engine';
+import { playSfx } from '../game/sound';
 
 interface EventModalProps {
   olay: EvOlayi | KomsuHikayeOlayi;
@@ -106,7 +107,10 @@ export const EventModal: React.FC<EventModalProps> = ({
                 type="button"
                 data-testid={`event-option-${secenek.id}`}
                 disabled={devredisi}
-                onClick={() => onSecenekSec(secenek.id)}
+                onClick={() => {
+                  playSfx('menu_tik');
+                  onSecenekSec(secenek.id);
+                }}
                 className={`w-full min-h-[52px] text-left border px-4 py-3 transition-colors group ${
                   devredisi
                     ? 'border-[#273147] bg-[#0D1019] text-[#5B657A] opacity-65 cursor-not-allowed'

@@ -8,7 +8,7 @@ import {
   oyuncuHamleSec,
   rakipHamleSec,
 } from './combat';
-import { sesAcikMi, sesCal, sesTercihiDegistir, titresimTetikle } from './sound';
+import { playSfx, sesAcikMi, sesTercihiDegistir, titresimTetikle } from './sound';
 
 test('gerçek zamanlı dövüş otomatik akar ve statlara göre hasar verir', () => {
   const oyun = yeniOyunOlustur('Gölge');
@@ -230,11 +230,12 @@ test('ses modülü tarayıcı dışı Node ortamında hata fırlatmadan çalış
   assert.equal(sesAcikMi(), true);
   assert.equal(sesTercihiDegistir(false), false);
   assert.doesNotThrow(() => {
-    sesCal('gong');
-    sesCal('yumruk');
-    sesCal('nakavt');
+    playSfx('gong');
+    playSfx('yumruk');
+    playSfx('nakavt');
     titresimTetikle(30);
   });
+  sesTercihiDegistir(true);
 });
 
 test('C1 yetenek ağacından açılan aktif hamleler ve pasifler dövüşte otomatik uygulanır', () => {

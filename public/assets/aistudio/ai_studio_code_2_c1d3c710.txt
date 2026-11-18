@@ -1,0 +1,27 @@
+Mevcut dövüş sistemine (`combat.ts`, `ArenaCombatCanvas.tsx`, `ArenaCombatView.tsx`) aşağıdaki dövüş hissi, ses ve mobil dokunmatik iyileştirmelerini ekle. Mevcut tüm `engine.test.ts` ve `combat.test.ts` testleri geçmeye devam etsin.
+
+1. Rakip Saldırı Telgrafı (`!`) ve "Mükemmel Kaçınma / Blok" (`src/game/combat.ts` & `ArenaCombatCanvas.tsx`):
+- `DovuscuDurumu` içine `hazirlananHamleId?: string | null` ve `DovusDurumu` içine `hitstopKalanMs: number` (kısa darbe donması) ile `sonKomboSayisi: number` ekle.
+- Rakibin `otomatikSayacMs` değeri 550 ms veya altına düştüğünde (saldırı gerçekleşmeden hemen önceki hazırlık penceresi), rakip sıradaki hamlesini `rakipHamleSec` ile önceden seçip `hazirlananHamleId` içine kilitle. `otomatikSayacMs` sıfıra indiğinde mevcut testlerin beklediği gibi vuruş hemen çözülsün.
+- Eğer `hazirlananHamleId` saldırı türündeyse (`yumruk` veya `tekme`), `ArenaCombatCanvas.tsx` içinde rakibin tepesinde belirgin bir pixel `!` uyarı işareti ve hafif geri çekilme/parıltı göster.
+- Oyuncu tam rakip saldırı hazırlığındayken (`hazirlananHamleId` saldırı ve `otomatikSayacMs <= 550`) **Blok** veya **Kaçınma** (`geri_cekil`, `egil_yana_kay`) basarsa bunu "Mükemmel Zamanlama" olarak işaretle:
+  - Mükemmel Blok: Gelen hasarı %85 azaltır + ekstra stamina toparlar + `MÜKEMMEL BLOK!` yüzen yazısı çıkar.
+  - Mükemmel Kaçınma: %100 sıyrılır, `karsiSaldiriKalanMs` süresini uzatır, `MÜKEMMEL KAÇINMA!` yazısı çıkarır ve sonraki karşı saldırının hasarını %65 artırır.
+- Sert darbe, mükemmel savunma ve kombo bitiricilerinde `hitstopKalanMs` (75–100 ms) uygula; `hitstopKalanMs > 0` iken yalnızca görsel sarsıntı/flaş aksın, `ko_yavaslatma` fazını geciktirmesin.
+
+2. Kombo Zinciri (`src/data/gameData.ts` & `src/game/combat.ts`):
+- `HAMLE_LISTESI` içindeki mevcut `komboEtiketi` alanlarını (`acilim`, `denge_bozucu`, `bitirici`) kullan.
+- Oyuncu 3.5 saniye içinde peş peşe `acilim` -> `denge_bozucu` veya `acilim`/`denge_bozucu` -> `bitirici` isabet ettirirse kombo sayacını artır.
+- 2x veya 3x kombo tamamlandığında son vuruş hasarına +%25/%+35 bonus ver, ekstra ekran sarsıntısı ekle ve `2x KOMBO!` / `3x KOMBO!` yüzen metni göster.
+
+3. Dış Dosyasız Ses Sentezi ve Mobil Titreşim (`src/game/sound.ts` - Yeni Dosya):
+- Harici ses dosyası kullanmadan Web Audio API (`AudioContext`) ile hafif bir retro ses sentezleyicisi yaz: `gong`, `yumruk`, `sert_yumruk`, `blok`, `kacinma`, `mukemmel`, `kombo`, `nakavt`, `tik`.
+- `localStorage` üzerinden ses açık/kapalı tercihini sakla (`sesAcikMi`, `sesTercihiDegistir`).
+- Vuruş, blok, mükemmel savunma ve nakavt anlarında `navigator.vibrate?.(...)` ile 20–45 ms'lik hafif dokunsal titreşim tetikle (desteklemeyen tarayıcılarda hatasız geç).
+
+4. Arena Arayüzü ve Başparmak Ergonomisi (`src/components/ArenaCombatView.tsx`):
+- Üst şeride tek tıkla çalışan "Ses Açık / Kapalı" ikonu ekle.
+- Maç başladığında `gong`, hamle/vuruş/savunma olayları gerçekleştiğinde ilgili ses ve titreşimi çal (sesin tekrar etmemesi için olay/hasar ID veya sayaç farkı ile tetikle).
+- Mobil ekranlarda (`sm` altı) dövüş butonlarını başparmakla rahat basılacak şekilde iki gruba ayır: Sol tarafta Saldırı hamleleri (`yumruk` + `tekme`), sağ tarafta Savunma/Kaçınma hamleleri (`kacinma`). Masaüstünde mevcut 4 sütunlu düzen ve `1–7` klavye kısayolları korunsun.
+
+Değişikliklerden sonra `npm run lint`, `npm test` ve `npm run build` çalıştırıp tüm testlerin geçtiğini doğrula.

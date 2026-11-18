@@ -1,0 +1,69 @@
+@import "tailwindcss";
+
+/* ============================================================================
+   GÖRSEL TEMA DEĞİŞKENLERİ
+   Tüm renkler ve tipografi değerleri src/game/theme.ts ile senkronize çalışır.
+   ============================================================================ */
+:root {
+  --bg-canvas: #0b0e17;
+  --bg-surface: #121724;
+  --bg-surface-alt: #181f30;
+  --border-hairline: #273147;
+  --border-strong: #3a4766;
+  --text-primary: #eaecef;
+  --text-muted: #8b95ab;
+  --accent-primary: #d63838;
+  --accent-primary-hover: #e34a4a;
+  --accent-amber: #d99b38;
+  --font-display: 'Barlow Condensed', system-ui, sans-serif;
+  --font-body: 'Plus Jakarta Sans', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background-color: var(--bg-canvas);
+  color: var(--text-primary);
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
+  overflow-x: clip;
+}
+
+.font-display {
+  font-family: var(--font-display);
+}
+
+.font-mono-tabular {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Kaydırma çubuğu (koyu grafik roman stili) */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--bg-canvas);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

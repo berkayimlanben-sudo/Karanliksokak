@@ -1,0 +1,46 @@
+Mevcut projeye aşağıdaki performans, bellek (GC) ve oyun mantığı optimizasyonlarını uygula. Tüm mevcut export isimlerini, `vite.config.ts` ayarlarını ve test uyumluluğunu koru.
+
+1. `src/game/pixelSprites.ts`:
+- `keremPaletiOlustur(g)` fonksiyonunu `WeakMap<KarakterGorunumu, PikselPaleti>` ile memoize et; aynı görünüm nesnesi için her karede yeni palet üretme.
+- `pikselSpriteCiz` için `WeakMap` kimlikleri + `Map<string, HTMLCanvasElement>` (maksimum 160 kayıt sınırı ile) 1×1 doğal boyutlu offscreen canvas önbelleği ekle. Tarayıcı ortamında (`typeof document !== 'undefined'`) sprite'ı yalnızca ilk seferinde offscreen canvas'a çiz, sonraki tüm karelerde `ctx.drawImage(...)` ile (`tersCevir` aktifse `save/translate/scale(-1, 1)/restore` kullanarak) keskin biçimde ölçekle. Node/SSR ortamı için mevcut piksel döngüsünü yedek (fallback) olarak koru.
+
+2. `src/game/engine.ts`:
+- Modül başında `MEKAN_HARITASI`, `STAT_HARITASI`, `YEMEK_HARITASI`, `ESYA_HARITASI`, `EV_SEVIYE_HARITASI`, `IS_HARITASI` ve `RAKIP_HARITASI` (`Map`) indeksleri oluştur; `hesaplaTuretilmisDegerler`, `yeniGuneGec`, `mekanaGit`, `antrenmanYap`, `vardiyaYap`, `yemekYe`, `evEsyasiAl`, `evYukselt` ve `dovusSonucunuUygula` içinde `.find()` yerine `O(1)` `.get()` kullan.
+- `gecmiseEkle` fonksiyonunda gereksiz tam dizi kopyasını azalt (`gecmis.length >= 18 ? [yeniKayit, ...gecmis.slice(0, 17)] : [yeniKayit, ...gecmis]`).
+- `olaySecenegiUygula` içinde para istismarını önle: Eğer `etkiler.para && etkiler.para < 0 && state.para < Math.abs(etkiler.para)` ise `aktifOlay`'ı kapatmadan uyarı `sonBildirim`'i ile mevcut `state`'i döndür.
+- `durumuYukle` doğrulamasını sertleştir (`statlar.guc/ceviklik/refleks/dayaniklilik` kontrolleri ve eksik diziler için `?? []`).
+
+3. `src/game/combat.ts`:
+- `HAMLE_HARITASI = new Map(HAMLE_LISTESI.map((h) => [h.id, h]))` ile `hamleBul`'u `O(1)` yap.
+- `rakipAcikHamleler` içinde geçici `dummyStatlar` nesnesi oluşturmadan doğrudan `statlar` üzerinden kontrol yap.
+- `sayacAzalt(beklemeler, dtMs)` içinde `Object.keys(beklemeler).length === 0` ise yeni `{}` nesnesi üretmeden doğrudan `beklemeler` referansını döndür.
+- `dovusAdimi` (hem `devam_ediyor` hem `ko_yavaslatma` fazında) `yuzenSayilar.length > 0` değilse yeni dizi tahsis etme; boşken aynı referansı koru.
+
+4. `src/App.tsx`:
+- `RAKIP_HARITASI` (`Map`) kullanarak `handleMacaBasla` içinde `O(1)` rakip ara.
+- Otomatik kayıt `useEffect`'inden (`durumuKaydet(oyunDurumu)`) gereksiz `setKayitliOyun(oyunDurumu)` çağrısını kaldır ki her aksiyonda `App` iki kez render olmasın.
+
+5. `src/components/ArenaCombatView.tsx`:
+- `dovusBaslat(oyun, rakip)` çağrısını bileşen gövdesinden çıkarıp `useState<DovusDurumu>(() => dovusBaslat(oyun, rakip))` lazy initializer içine al ve `dovusRef`'i bununla başlat (65ms HUD güncellemelerinde tekrar hesaplanmasın).
+- `onMacBitti` için `onMacBittiRef` kullan ve ana `requestAnimationFrame` `useEffect`'inin bağımlılığını `[]` yap.
+- Klavye kısayolları için `TUS_HAMLE_HARITASI` (`Map`) kullan; `hamleTetikle` içinde `if (guncel === dovusRef.current) return;` kontrolü ekle.
+
+6. `src/components/ArenaCombatCanvas.tsx`:
+- `boyutGuncelle` içinde `hudFont`, `badgeFont`, `dmgFont`, `koFont` string'lerini bir kez oluşturup önbelleğe al, `ciz` içinde tekrar string birleştirme.
+- `ciz` başında `if (document.hidden)` ise `lastTime = now` güncelleyip çizimi atla.
+- `d?.durum === 'bitti'` olduğunda son kareyi çizdikten sonra `requestAnimationFrame` döngüsünü durdur.
+
+7. `src/components/NeighborhoodCanvas.tsx`:
+- `ciz` başında `if (document.hidden && !stateRef.current.yenidenCiz)` kontrolüyle arka planda gereksiz çizimi atla.
+
+8. `src/components/EventModal.tsx`:
+- `secenek.etkiler.para < 0` olan seçeneklerde `state.para < Math.abs(secenek.etkiler.para)` ise butonu `disabled` yap, soluk stil ver ve sağda `Yetersiz (X ₺)` uyarısı göster.
+
+9. `src/components/HomeHub.tsx`:
+- `hesaplaTuretilmisDegerler(state)`, `macaGirilebilirMi(state)` ve `aktifMekanTanimi` hesaplarını `useMemo` ile sarmala.
+
+10. `src/components/TitleScreen.tsx` & `package.json`:
+- `TitleScreen.tsx` içindeki her iki SVG başlığında da `"A AŞAMASI · MEKANLAR, ZAMAN VE EV"` alt başlığını `"HAYATTA KAL · ÇALIŞ · SOKAKTA DÖVÜŞ"` olarak güncelle.
+- `package.json` `"scripts"` içine `"test": "tsx --test src/game/*.test.ts"` ekle.
+
+Tüm değişiklikleri yaptıktan sonra `npm run lint`, `npm test` ve `npm run build` komutlarını çalıştırarak hata olmadığını doğrula.

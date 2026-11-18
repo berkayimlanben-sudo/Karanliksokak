@@ -24,10 +24,12 @@ import {
   YATAK_SPRITE,
 } from '../game/pixelSprites';
 import {
-  hariciSpriteCiz,
-  hariciSpriteHazirMi,
-  hariciSpriteKaresiAl,
-  hedefEkranOlcegiHesapla,
+  KarakterCizimPlani,
+  karakterCizimPlaniHazirla,
+  karakterEskiPikselKatmaniCiz,
+  karakterHariciKatmaniCiz,
+} from '../game/characterRenderer';
+import {
   spriteAtlasDinleyicisiniKaldir,
   spriteAtlasOnYukle,
   SpriteAksiyonId,
@@ -575,49 +577,89 @@ export const NeighborhoodCanvas: React.FC<NeighborhoodCanvasProps> = ({
       const zeminY = zeminYHesa();
       pCtx.drawImage(bgCanvas, 0, 0);
 
+      interface SahneNpc {
+        karakterId: string;
+        sprite: typeof KEREM_IDLE_0;
+        palet: ReturnType<typeof keremPaletiOlustur>;
+        x: number;
+        y: number;
+        tersCevir: boolean;
+        plan: KarakterCizimPlani;
+      }
+
+      const sahneNpcleri: SahneNpc[] = [];
+
       // Evdeyken Emine ve Elif sprite'ları çakışmasız yerleştirilir
       if (s.mekanId === 'ev') {
         const aileKare = Math.floor(elapsed * 1.3) % 2;
         const emineSprite = aileKare === 0 ? EMINE_IDLE_0 : EMINE_IDLE_1;
         const elifSprite = aileKare === 0 ? ELIF_IDLE_0 : ELIF_IDLE_1;
 
-        pikselSpriteCiz(
-          pCtx,
-          emineSprite,
-          AILE_PALETI,
-          Math.round(vw * 0.19),
-          zeminY + 2,
-          spriteOlcek
-        );
-        pikselSpriteCiz(
-          pCtx,
-          elifSprite,
-          AILE_PALETI,
-          Math.round(vw * 0.54),
-          zeminY + 2,
-          spriteOlcek
+        sahneNpcleri.push(
+          {
+            karakterId: 'emine',
+            sprite: emineSprite,
+            palet: AILE_PALETI,
+            x: Math.round(vw * 0.19),
+            y: zeminY + 2,
+            tersCevir: false,
+            plan: karakterCizimPlaniHazirla({
+              karakterId: 'emine',
+              aksiyon: 'idle',
+              gecenSureSn: elapsed,
+              reducedMotion,
+            }),
+          },
+          {
+            karakterId: 'elif',
+            sprite: elifSprite,
+            palet: AILE_PALETI,
+            x: Math.round(vw * 0.54),
+            y: zeminY + 2,
+            tersCevir: false,
+            plan: karakterCizimPlaniHazirla({
+              karakterId: 'elif',
+              aksiyon: 'idle',
+              gecenSureSn: elapsed + 0.25,
+              reducedMotion,
+            }),
+          }
         );
       } else if (s.mekanId === 'spor_salonu') {
         // Müslüm Hoca ve Çiğdem Hoca antrenör figürleri
         const hocaKare = Math.floor(elapsed * 1.4) % 2 === 0 ? KEREM_IDLE_0 : KEREM_IDLE_1;
         const muslumPalet = keremPaletiOlustur(ANTRENOR_LISTESI[0].gorunum);
         const cigdemPalet = keremPaletiOlustur(ANTRENOR_LISTESI[1].gorunum);
-        pikselSpriteCiz(
-          pCtx,
-          hocaKare,
-          muslumPalet,
-          Math.round(vw * 0.22),
-          zeminY + 2,
-          spriteOlcek
-        );
-        pikselSpriteCiz(
-          pCtx,
-          hocaKare,
-          cigdemPalet,
-          Math.round(vw * 0.82),
-          zeminY + 2,
-          spriteOlcek,
-          true
+
+        sahneNpcleri.push(
+          {
+            karakterId: 'muslum_hoca',
+            sprite: hocaKare,
+            palet: muslumPalet,
+            x: Math.round(vw * 0.22),
+            y: zeminY + 2,
+            tersCevir: false,
+            plan: karakterCizimPlaniHazirla({
+              karakterId: 'muslum_hoca',
+              aksiyon: 'idle',
+              gecenSureSn: elapsed,
+              reducedMotion,
+            }),
+          },
+          {
+            karakterId: 'cigdem_hoca',
+            sprite: hocaKare,
+            palet: cigdemPalet,
+            x: Math.round(vw * 0.82),
+            y: zeminY + 2,
+            tersCevir: true,
+            plan: karakterCizimPlaniHazirla({
+              karakterId: 'cigdem_hoca',
+              aksiyon: 'idle',
+              gecenSureSn: elapsed + 0.3,
+              reducedMotion,
+            }),
+          }
         );
       } else if (s.mekanId === 'market') {
         // Bakkal Rıza kasanın yanında bekliyor
@@ -631,15 +673,20 @@ export const NeighborhoodCanvas: React.FC<NeighborhoodCanvasProps> = ({
           b: '#C9CDD6',
           r: '#6CC296',
         };
-        pikselSpriteCiz(
-          pCtx,
-          rizaKare,
-          rizaPalet,
-          Math.max(10, vw - 48 - 16 * spriteOlcek),
-          zeminY + 2,
-          spriteOlcek,
-          true
-        );
+        sahneNpcleri.push({
+          karakterId: 'bakkal_riza',
+          sprite: rizaKare,
+          palet: rizaPalet,
+          x: Math.max(10, vw - 48 - 16 * spriteOlcek),
+          y: zeminY + 2,
+          tersCevir: true,
+          plan: karakterCizimPlaniHazirla({
+            karakterId: 'bakkal_riza',
+            aksiyon: 'idle',
+            gecenSureSn: elapsed,
+            reducedMotion,
+          }),
+        });
       } else if (s.mekanId === 'sokak_arena') {
         // Nuri Abi ve sokak tayfası kenarda izliyor
         const sokakKare = Math.floor(elapsed * 1.3) % 2;
@@ -652,23 +699,51 @@ export const NeighborhoodCanvas: React.FC<NeighborhoodCanvasProps> = ({
           b: '#9BA3B5',
           r: '#D99B38',
         };
-        pikselSpriteCiz(
-          pCtx,
-          sokakKare === 0 ? KEREM_IDLE_0 : KEREM_IDLE_1,
-          nuriPalet,
-          Math.round(vw * 0.12),
-          zeminY + 1,
-          spriteOlcek
+        sahneNpcleri.push(
+          {
+            karakterId: 'nuri_abi',
+            sprite: sokakKare === 0 ? KEREM_IDLE_0 : KEREM_IDLE_1,
+            palet: nuriPalet,
+            x: Math.round(vw * 0.12),
+            y: zeminY + 1,
+            tersCevir: false,
+            plan: karakterCizimPlaniHazirla({
+              karakterId: 'nuri_abi',
+              aksiyon: 'idle',
+              gecenSureSn: elapsed,
+              reducedMotion,
+            }),
+          },
+          {
+            karakterId: 'elif',
+            sprite: sokakKare === 0 ? ELIF_IDLE_0 : ELIF_IDLE_1,
+            palet: AILE_PALETI,
+            x: Math.round(vw * 0.84),
+            y: zeminY + 2,
+            tersCevir: true,
+            plan: karakterCizimPlaniHazirla({
+              karakterId: 'elif',
+              aksiyon: 'idle',
+              gecenSureSn: elapsed + 0.25,
+              reducedMotion,
+            }),
+          }
         );
-        pikselSpriteCiz(
-          pCtx,
-          sokakKare === 0 ? ELIF_IDLE_0 : ELIF_IDLE_1,
-          AILE_PALETI,
-          Math.round(vw * 0.84),
-          zeminY + 2,
-          spriteOlcek,
-          true
-        );
+      }
+
+      for (const npc of sahneNpcleri) {
+        if (!npc.plan.hariciAktif) {
+          karakterEskiPikselKatmaniCiz({
+            pCtx,
+            sprite: npc.sprite,
+            palet: npc.palet,
+            x: npc.x,
+            y: npc.y,
+            spriteOlcek,
+            tersCevir: npc.tersCevir,
+            golgeCiz: false,
+          });
+        }
       }
 
       // Elektrikli ısıtıcı animasyonlu kor parıltısı
@@ -686,23 +761,25 @@ export const NeighborhoodCanvas: React.FC<NeighborhoodCanvasProps> = ({
 
       // Kerem'in animasyonu (yürüme -> vuruş -> bekleme)
       const hedefX = Math.round(vw * s.karakterKonumX) - 8 * spriteOlcek;
+      let keremBaseX = hedefX;
       let keremX = hedefX;
       let keremY = zeminY + 3;
       const idleKareIndex = Math.floor(elapsed * 1.8) % 2;
       let keremSprite = idleKareIndex === 0 ? KEREM_IDLE_0 : KEREM_IDLE_1;
       let hariciAksiyon: SpriteAksiyonId = 'idle';
-      let hariciKareIndex = idleKareIndex;
+      let hariciIlerlemeOrani = 0;
 
       const keremPalet = keremPaletiOlustur(s.gorunum);
 
       if (s.yolculukSuresi > 0 && !reducedMotion) {
         const ilerleme = 1 - s.yolculukSuresi / YOLCULUK_SURESI;
-        keremX = Math.round(-12 + (hedefX + 12) * Math.min(1, ilerleme));
+        keremBaseX = Math.round(-12 + (hedefX + 12) * Math.min(1, ilerleme));
+        keremX = keremBaseX;
         const yurumeKare = Math.floor(elapsed * 9) % 3;
         keremSprite =
           yurumeKare === 0 ? KEREM_WALK_0 : yurumeKare === 1 ? KEREM_WALK_1 : KEREM_WALK_2;
         hariciAksiyon = 'walk';
-        hariciKareIndex = yurumeKare;
+        hariciIlerlemeOrani = Math.min(1, ilerleme);
       } else if (s.aksiyonSuresi > 0 && !reducedMotion) {
         const t = 1 - s.aksiyonSuresi / AKSIYON_SURESI;
         if (s.aksiyonTuru === 'dayaniklilik') {
@@ -710,37 +787,46 @@ export const NeighborhoodCanvas: React.FC<NeighborhoodCanvasProps> = ({
           keremSprite = kare === 0 ? KEREM_WALK_0 : kare === 1 ? KEREM_WALK_1 : KEREM_WALK_2;
           keremY -= Math.round(Math.abs(Math.sin(t * Math.PI * 6)) * 2);
           hariciAksiyon = 'walk';
-          hariciKareIndex = kare;
+          hariciIlerlemeOrani = t;
         } else {
           const faz = (t * 4) % 1;
           hariciAksiyon = 'punch';
+          hariciIlerlemeOrani = faz;
           if (faz < 0.25) {
             keremSprite = KEREM_PUNCH_0;
             keremX -= 2;
-            hariciKareIndex = 0;
           } else if (faz < 0.68) {
             keremSprite = KEREM_PUNCH_1;
             keremX += 3;
-            hariciKareIndex = 1;
           } else {
             keremSprite = KEREM_PUNCH_2;
             keremX += 1;
-            hariciKareIndex = 2;
           }
         }
       }
 
-      const hariciKare = hariciSpriteKaresiAl('kerem', hariciAksiyon, hariciKareIndex);
-      const hariciHazir = hariciKare ? hariciSpriteHazirMi(hariciKare) !== null : false;
+      const keremPlan = karakterCizimPlaniHazirla({
+        karakterId: 'kerem',
+        aksiyon: hariciAksiyon,
+        gecenSureSn: elapsed,
+        ilerlemeOrani: hariciIlerlemeOrani,
+        reducedMotion,
+      });
 
-      if (!hariciHazir) {
-        // Zemin gölgesi (eski piksel ızgarası yedeği)
-        pCtx.fillStyle = 'rgba(0, 0, 0, 0.52)';
-        pCtx.fillRect(keremX + 2 * spriteOlcek, zeminY + 1, 12 * spriteOlcek, 3);
-        pikselSpriteCiz(pCtx, keremSprite, keremPalet, keremX, keremY, spriteOlcek);
+      if (!keremPlan.hariciAktif) {
+        karakterEskiPikselKatmaniCiz({
+          pCtx,
+          sprite: keremSprite,
+          palet: keremPalet,
+          x: keremX,
+          y: keremY,
+          spriteOlcek,
+          golgeY: zeminY + 1,
+          golgeAlfa: 0.52,
+        });
       }
 
-      if (s.aksiyonSuresi > 0 && s.aksiyonTuru !== 'dayaniklilik' && !reducedMotion) {
+      if (!keremPlan.hariciAktif && s.aksiyonSuresi > 0 && s.aksiyonTuru !== 'dayaniklilik' && !reducedMotion) {
         const t = 1 - s.aksiyonSuresi / AKSIYON_SURESI;
         const faz = (t * 4) % 1;
         if (faz >= 0.26 && faz <= 0.65) {
@@ -764,21 +850,52 @@ export const NeighborhoodCanvas: React.FC<NeighborhoodCanvasProps> = ({
       ctx.clearRect(0, 0, displayW, displayH);
       ctx.drawImage(pixelCanvas, 0, 0, displayW, displayH);
 
-      if (hariciHazir && hariciKare) {
-        const olcekX = displayW / vw;
-        const olcekY = displayH / vh;
-        const hedefBoyPx = 22 * spriteOlcek * olcekY;
-        const maksBoyPx = Math.max(44, Math.round((zeminY - 10) * olcekY));
-        const ekranOlcegi = hedefEkranOlcegiHesapla(
+      const olcekX = displayW / vw;
+      const olcekY = displayH / vh;
+      const hedefBoyPx = 22 * spriteOlcek * olcekY;
+      const maksBoyPx = Math.max(44, Math.round((zeminY - 10) * olcekY));
+
+      for (const npc of sahneNpcleri) {
+        if (!npc.plan.hariciAktif) continue;
+        karakterHariciKatmaniCiz({
+          ctx,
+          plan: npc.plan,
+          aksiyon: 'idle',
+          ilerlemeOrani: 0,
+          gecenSureSn: elapsed,
+          merkezEkranX: (npc.x + 8 * spriteOlcek) * olcekX,
+          zeminEkranY: npc.y * olcekY,
           hedefBoyPx,
-          hariciKare.icerikYuksekligi,
-          maksBoyPx
-        );
-        hariciSpriteCiz(ctx, hariciKare, {
-          merkezEkranX: (keremX + 8 * spriteOlcek) * olcekX,
+          maksBoyPx,
+          olcekX,
+          olcekY,
+          tersCevir: npc.tersCevir,
+          golgeAlfa: 0.48,
+          reducedMotion,
+          saldiriIziCiz: false,
+          darbeKivilcimiCiz: false,
+        });
+      }
+
+      if (keremPlan.hariciAktif) {
+        karakterHariciKatmaniCiz({
+          ctx,
+          plan: keremPlan,
+          aksiyon: hariciAksiyon,
+          ilerlemeOrani: hariciIlerlemeOrani,
+          gecenSureSn: elapsed,
+          merkezEkranX: (keremBaseX + 8 * spriteOlcek) * olcekX,
           zeminEkranY: (zeminY + 2) * olcekY,
-          ekranOlcegi,
+          hedefBoyPx,
+          maksBoyPx,
+          olcekX,
+          olcekY,
+          tersCevir: false,
           golgeAlfa: 0.52,
+          reducedMotion,
+          vurusEfektRengi: s.aksiyonTuru === 'guc' ? '#D63838' : '#D99B38',
+          saldiriIziCiz: hariciAksiyon === 'punch',
+          darbeKivilcimiCiz: false,
         });
       }
 

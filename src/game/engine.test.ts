@@ -6,6 +6,7 @@ import {
   aileyleEtkiles,
   aktifDebufflariGetir,
   antrenmanYap,
+  debugStatlariAyarla,
   dovusSonucunuUygula,
   durumuKaydet,
   durumuYukle,
@@ -1159,6 +1160,39 @@ test('D3-Adım-5 100 simülasyonluk headless referans strateji denge testi', () 
     'Final para sonlu ve negatif olmamalı'
   );
   assert.ok(rapor.ortalamaMoral >= 50, `Moral sağlıklı kalmalı (ort: ${rapor.ortalamaMoral})`);
+});
+
+test('debugStatlariAyarla stat sınırlarını korur, hamleleri açar, HP/stamina ve yetenek puanını günceller', () => {
+  const baslangic = yeniOyunOlustur('Gölge');
+  const onceTuretilmis = hesaplaTuretilmisDegerler(baslangic);
+
+  // Güç ve Dayanıklılığı 7'ye çıkar, sınır dışı değerleri (0 -> 1, 99 -> 50) test et
+  const yukseltilmis = debugStatlariAyarla(baslangic, {
+    guc: 7,
+    dayaniklilik: 7,
+    ceviklik: 0,
+    refleks: 99,
+  });
+
+  assert.equal(yukseltilmis.statlar.guc.deger, 7);
+  assert.equal(yukseltilmis.statlar.dayaniklilik.deger, 7);
+  assert.equal(yukseltilmis.statlar.ceviklik.deger, 1);
+  assert.equal(yukseltilmis.statlar.refleks.deger, 50);
+
+  // Güç 6 (1 YP), Dayanıklılık 6 (1 YP), Refleks 6/8/10/12 (4 YP) = +6 YP
+  assert.equal(yukseltilmis.yetenekPuani, 6);
+  assert.ok(yukseltilmis.kazanilanStatEsikleri.includes('guc:6'));
+  assert.ok(yukseltilmis.kazanilanStatEsikleri.includes('dayaniklilik:6'));
+
+  // Türetilmiş değerler ve hamleler otomatik güncellenmeli
+  const sonraTuretilmis = hesaplaTuretilmisDegerler(yukseltilmis);
+  assert.ok(sonraTuretilmis.maksCan > onceTuretilmis.maksCan);
+  assert.ok(sonraTuretilmis.maksStamina > onceTuretilmis.maksStamina);
+  assert.ok(sonraTuretilmis.acikHamleIds.includes('sert_yumruk'));
+
+  // Aynı statları tekrar uygulamak çift YP vermemeli
+  const tekrar = debugStatlariAyarla(yukseltilmis, { guc: 7, dayaniklilik: 7 });
+  assert.equal(tekrar.yetenekPuani, 6);
 });
 
 

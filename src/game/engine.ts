@@ -598,6 +598,57 @@ function statEsikPuanlariniKontrolEt(
 }
 
 /**
+ * Geliştirici Debug Paneli için oyuncu statlarını (Güç, Çeviklik, Refleks, Dayanıklılık)
+ * günceller; stat eşiği yetenek puanlarını ve açılan hamle bildirimlerini tutarlı uygular.
+ */
+export function debugStatlariAyarla(
+  state: OyunDurumu,
+  hedefStatlar: Partial<Record<StatId, number>>
+): OyunDurumu {
+  const oncekiAcik = new Set(hesaplaTuretilmisDegerler(state).acikHamleIds);
+  const yeniStatlar = { ...state.statlar };
+
+  for (const stat of STAT_TANIMLARI) {
+    const ham = hedefStatlar[stat.id];
+    if (ham === undefined) continue;
+    const mevcut = yeniStatlar[stat.id] ?? { deger: stat.baslangicDegeri, ilerleme: 0 };
+    const guvenli = Number.isFinite(ham) ? sinirla(Math.round(ham), 1, 50) : mevcut.deger;
+    yeniStatlar[stat.id] = {
+      deger: guvenli,
+      ilerleme: mevcut.ilerleme,
+    };
+  }
+
+  const esikOdul = statEsikPuanlariniKontrolEt(yeniStatlar, state.kazanilanStatEsikleri ?? []);
+  const yeniAcilanHamleler = HAMLE_LISTESI.filter(
+    (h) =>
+      !oncekiAcik.has(h.id) &&
+      hamleAcikMi(h, yeniStatlar, state.acikYetenekIds ?? [], state.ogrenilenHocaDersIds ?? [])
+  );
+
+  let mesaj = `[DEBUG] Statlar güncellendi (GÜÇ ${yeniStatlar.guc.deger} · ÇEV ${yeniStatlar.ceviklik.deger} · REF ${yeniStatlar.refleks.deger} · DAY ${yeniStatlar.dayaniklilik.deger}).`;
+  if (esikOdul.ekPuan > 0) {
+    mesaj += esikOdul.mesajNotu;
+  }
+  if (yeniAcilanHamleler.length > 0) {
+    mesaj += ` Yeni hamle açıldı: ${yeniAcilanHamleler.map((h) => h.isim).join(', ')}.`;
+  }
+
+  return {
+    ...state,
+    statlar: yeniStatlar,
+    yetenekPuani: (state.yetenekPuani ?? 0) + esikOdul.ekPuan,
+    kazanilanStatEsikleri: esikOdul.yeniEsikler,
+    sonBildirim: {
+      gun: state.gun,
+      saatMetni: saatMetni(state.saatDakika),
+      metin: mesaj,
+      tur: esikOdul.ekPuan > 0 || yeniAcilanHamleler.length > 0 ? 'basari' : 'bilgi',
+    },
+  };
+}
+
+/**
  * Yetenek ağacındaki bir düğümün açılıp açılamayacağını ve kilit nedenini döndürür.
  */
 export function yetenekAcilabilirMi(

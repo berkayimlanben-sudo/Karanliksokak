@@ -3,6 +3,7 @@ import {
   Activity,
   Bug,
   Download,
+  Dumbbell,
   FastForward,
   Music,
   RotateCcw,
@@ -14,9 +15,9 @@ import {
   Wrench,
   X,
 } from 'lucide-react';
-import { RAKIP_LISTESI, RakipTanimi, StatId } from '../data/gameData';
+import { RAKIP_LISTESI, RakipTanimi, STAT_TANIMLARI, StatId } from '../data/gameData';
 import { DENGE, dengeAlanlariniListele, dengeGuncelle, dengeSifirla } from '../game/balance';
-import type { OyunDurumu } from '../game/engine';
+import { debugStatlariAyarla, type OyunDurumu } from '../game/engine';
 import { MuzikRuhHali, playMusic, playSfx, SFX_LISTESI, stopMusic } from '../game/sound';
 import {
   subscribeTelemetriLoglari,
@@ -95,6 +96,12 @@ export const AudioDebugPanel: React.FC<AudioDebugPanelProps> = ({
   const [taslakGenelItibar, setTaslakGenelItibar] = useState('0');
   const [taslakSaygi, setTaslakSaygi] = useState('0');
   const [taslakKorku, setTaslakKorku] = useState('0');
+  const [taslakOyuncuStatlar, setTaslakOyuncuStatlar] = useState<Record<StatId, string>>({
+    guc: '4',
+    ceviklik: '5',
+    refleks: '4',
+    dayaniklilik: '5',
+  });
 
   // Rakip seçimi ve stat özelleştirme
   const [seciliRakipId, setSeciliRakipId] = useState<string>(RAKIP_LISTESI[0].id);
@@ -127,6 +134,12 @@ export const AudioDebugPanel: React.FC<AudioDebugPanelProps> = ({
     setTaslakGenelItibar(String(oyunDurumu.itibar.genel));
     setTaslakSaygi(String(oyunDurumu.itibar.saygi));
     setTaslakKorku(String(oyunDurumu.itibar.korku));
+    setTaslakOyuncuStatlar({
+      guc: String(oyunDurumu.statlar.guc.deger),
+      ceviklik: String(oyunDurumu.statlar.ceviklik.deger),
+      refleks: String(oyunDurumu.statlar.refleks.deger),
+      dayaniklilik: String(oyunDurumu.statlar.dayaniklilik.deger),
+    });
   }, [oyunDurumu]);
 
   useEffect(() => {
@@ -185,6 +198,40 @@ export const AudioDebugPanel: React.FC<AudioDebugPanelProps> = ({
       },
       'debug_manuel'
     );
+  };
+
+  const handleOyuncuStatUygula = (e?: React.FormEvent) => {
+    e?.preventDefault();
+    if (!oyunDurumu || !onOyunDurumuAyarla) return;
+
+    const hedef: Partial<Record<StatId, number>> = {};
+    for (const stat of STAT_TANIMLARI) {
+      hedef[stat.id] = sayiSinirla(Number(taslakOyuncuStatlar[stat.id]), 1, 50);
+    }
+    onOyunDurumuAyarla(debugStatlariAyarla(oyunDurumu, hedef), 'debug_stat');
+  };
+
+  const handleOyuncuStatDelta = (statId: StatId, delta: number) => {
+    if (!oyunDurumu || !onOyunDurumuAyarla) return;
+    const mevcut = oyunDurumu.statlar[statId].deger;
+    const yeniDeger = sayiSinirla(mevcut + delta, 1, 50);
+    onOyunDurumuAyarla(
+      debugStatlariAyarla(oyunDurumu, { [statId]: yeniDeger }),
+      'debug_stat'
+    );
+  };
+
+  const handleTumStatlarHizli = (hedefMod: { tur: 'ekle'; delta: number } | { tur: 'sabitle'; deger: number }) => {
+    if (!oyunDurumu || !onOyunDurumuAyarla) return;
+    const hedef: Partial<Record<StatId, number>> = {};
+    for (const stat of STAT_TANIMLARI) {
+      const mevcut = oyunDurumu.statlar[stat.id].deger;
+      hedef[stat.id] =
+        hedefMod.tur === 'ekle'
+          ? sayiSinirla(mevcut + hedefMod.delta, 1, 50)
+          : sayiSinirla(hedefMod.deger, 1, 50);
+    }
+    onOyunDurumuAyarla(debugStatlariAyarla(oyunDurumu, hedef), 'debug_stat');
   };
 
   const handleZorlaDovus = () => {
@@ -467,6 +514,108 @@ export const AudioDebugPanel: React.FC<AudioDebugPanelProps> = ({
                         className="w-full py-1.5 text-[11px] font-semibold border border-[#6CC296]/70 bg-[#14261E] hover:border-[#6CC296] text-[#6CC296] cursor-pointer"
                       >
                         Durum Değerlerini Uygula
+                      </button>
+                    </form>
+
+                    {/* Oyuncu Statları (Güç, Çeviklik, Refleks, Dayanıklılık) */}
+                    <form
+                      onSubmit={handleOyuncuStatUygula}
+                      data-testid="debug-player-stats-section"
+                      className="space-y-2 border border-[#273147] bg-[#0B0E17] p-2.5"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-[#EAECEF]">
+                          <Dumbbell className="w-3.5 h-3.5 text-[#D99B38]" />
+                          <span>Oyuncu Statları (1–50)</span>
+                        </span>
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            data-testid="debug-player-stat-all-plus1"
+                            onClick={() => handleTumStatlarHizli({ tur: 'ekle', delta: 1 })}
+                            className="px-1.5 py-0.5 text-[10px] font-mono-tabular border border-[#273147] bg-[#181F30] hover:border-[#D99B38] text-[#F5D08A] cursor-pointer"
+                          >
+                            +1 Tümü
+                          </button>
+                          <button
+                            type="button"
+                            data-testid="debug-player-stat-all-15"
+                            onClick={() => handleTumStatlarHizli({ tur: 'sabitle', deger: 15 })}
+                            className="px-1.5 py-0.5 text-[10px] font-mono-tabular border border-[#273147] bg-[#181F30] hover:border-[#6CC296] text-[#6CC296] cursor-pointer"
+                          >
+                            = 15
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="space-y-1.5">
+                        {STAT_TANIMLARI.map((stat) => (
+                          <div
+                            key={stat.id}
+                            className="flex items-center justify-between gap-2 text-[11px]"
+                          >
+                            <label
+                              htmlFor={`debug-player-stat-${stat.id}`}
+                              className="flex items-center gap-1.5 min-w-0"
+                            >
+                              <span className="font-semibold text-[#EAECEF] truncate">
+                                {stat.isim}
+                              </span>
+                              <span className="text-[10px] font-mono-tabular text-[#8B95AB]">
+                                ({stat.kisaKod})
+                              </span>
+                            </label>
+                            <div className="flex items-center gap-1 shrink-0">
+                              <button
+                                type="button"
+                                data-testid={`debug-player-stat-minus1-${stat.id}`}
+                                onClick={() => handleOyuncuStatDelta(stat.id, -1)}
+                                className="px-1.5 py-1 text-[10px] font-mono-tabular border border-[#273147] bg-[#121724] hover:border-[#D63838] text-[#C8CFDC] cursor-pointer"
+                              >
+                                -1
+                              </button>
+                              <input
+                                id={`debug-player-stat-${stat.id}`}
+                                type="number"
+                                min={1}
+                                max={50}
+                                data-testid={`debug-player-stat-${stat.id}`}
+                                value={taslakOyuncuStatlar[stat.id]}
+                                onChange={(e) =>
+                                  setTaslakOyuncuStatlar((prev) => ({
+                                    ...prev,
+                                    [stat.id]: e.target.value,
+                                  }))
+                                }
+                                className="w-12 px-1 py-1 text-center bg-[#121724] border border-[#273147] text-[#EAECEF] font-mono-tabular"
+                              />
+                              <button
+                                type="button"
+                                data-testid={`debug-player-stat-plus1-${stat.id}`}
+                                onClick={() => handleOyuncuStatDelta(stat.id, 1)}
+                                className="px-1.5 py-1 text-[10px] font-mono-tabular border border-[#273147] bg-[#182236] hover:border-[#D99B38] text-[#F5D08A] cursor-pointer"
+                              >
+                                +1
+                              </button>
+                              <button
+                                type="button"
+                                data-testid={`debug-player-stat-plus5-${stat.id}`}
+                                onClick={() => handleOyuncuStatDelta(stat.id, 5)}
+                                className="px-1.5 py-1 text-[10px] font-mono-tabular border border-[#273147] bg-[#14261E] hover:border-[#6CC296] text-[#6CC296] cursor-pointer"
+                              >
+                                +5
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+
+                      <button
+                        type="submit"
+                        data-testid="debug-apply-player-stats"
+                        className="w-full py-1.5 text-[11px] font-semibold border border-[#D99B38]/70 bg-[#241E12] hover:border-[#D99B38] text-[#F5D08A] cursor-pointer"
+                      >
+                        Statları Uygula
                       </button>
                     </form>
 

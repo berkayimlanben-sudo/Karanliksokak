@@ -403,6 +403,62 @@ test('C3 yüksek Korku itibarında rakipler dövüşe çekinerek ve düşük sta
   assert.ok(halil48Dovus.oyuncuHazirlikCezasiMetni?.includes('-%22'));
 });
 
+test('aktifHamleId seçilen saldırı ve savunma hamlelerini takip eder, aksiyon bitince sıfırlar', () => {
+  const temel = yeniOyunOlustur('Gölge');
+  const oyun = {
+    ...temel,
+    statlar: {
+      guc: { deger: 10, ilerleme: 0 },
+      ceviklik: { deger: 10, ilerleme: 0 },
+      refleks: { deger: 10, ilerleme: 0 },
+      dayaniklilik: { deger: 10, ilerleme: 0 },
+    },
+    acikYetenekIds: ['y_sokak_aparkati', 't_doner_tekme', 's_celik_gard', 's_hayalet_eskiv'],
+  };
+
+  let dovus = dovusBaslat(oyun, RAKIP_LISTESI[0]);
+  assert.equal(dovus.oyuncu.aktifHamleId, null);
+
+  // Çelik Gard aktifHamleId'yi anında set eder ve darbe alsa da korur
+  dovus = oyuncuHamleSec(dovus, 'celik_gard');
+  assert.equal(dovus.oyuncu.aksiyon, 'blok');
+  assert.equal(dovus.oyuncu.aktifHamleId, 'celik_gard');
+
+  dovus = {
+    ...dovus,
+    oyuncu: { ...dovus.oyuncu, otomatikSayacMs: 4000 },
+    rakip: { ...dovus.rakip, otomatikSayacMs: 10, aksiyon: 'idle' },
+  };
+  dovus = dovusAdimi(dovus, 30, () => 0.05);
+  assert.equal(dovus.oyuncu.aksiyon, 'blok');
+  assert.equal(dovus.oyuncu.aktifHamleId, 'celik_gard');
+
+  // Çene Aparkatı saldırısı çözüldüğünde aktifHamleId 'cene_aparkati' olmalı
+  let aparkatDovus = dovusBaslat(oyun, RAKIP_LISTESI[0]);
+  aparkatDovus = oyuncuHamleSec(aparkatDovus, 'cene_aparkati');
+  aparkatDovus = {
+    ...aparkatDovus,
+    oyuncu: { ...aparkatDovus.oyuncu, otomatikSayacMs: 10 },
+    rakip: { ...aparkatDovus.rakip, can: 400, maksCan: 400, otomatikSayacMs: 4000 },
+  };
+  aparkatDovus = dovusAdimi(aparkatDovus, 30, () => 0.05);
+  assert.equal(aparkatDovus.oyuncu.aksiyon, 'yumruk');
+  assert.equal(aparkatDovus.oyuncu.aktifHamleId, 'cene_aparkati');
+
+  // Aksiyon süresi bitip idle'a dönünce aktifHamleId null olmalı
+  for (let i = 0; i < 6; i += 1) {
+    aparkatDovus = dovusAdimi(aparkatDovus, 90, () => 0.5);
+  }
+  assert.equal(aparkatDovus.oyuncu.aksiyon, 'idle');
+  assert.equal(aparkatDovus.oyuncu.aktifHamleId, null);
+
+  // Hayalet Adım kaçınması aktifHamleId 'hayalet_adim' olarak izlenir
+  let hayaletDovus = dovusBaslat(oyun, RAKIP_LISTESI[0]);
+  hayaletDovus = oyuncuHamleSec(hayaletDovus, 'hayalet_adim');
+  assert.equal(hayaletDovus.oyuncu.aksiyon, 'kacinma');
+  assert.equal(hayaletDovus.oyuncu.aktifHamleId, 'hayalet_adim');
+});
+
 
 
 

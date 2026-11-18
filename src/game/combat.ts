@@ -69,6 +69,7 @@ export interface DovuscuDurumu {
   stamina: number;
   maksStamina: number;
   aksiyon: DovusAksiyonTuru;
+  aktifHamleId?: string | null;
   aksiyonKalanMs: number;
   aksiyonToplamMs: number;
   otomatikSayacMs: number;
@@ -237,6 +238,7 @@ export function dovusBaslat(
       stamina: Math.round(oyuncuMaksStam * hazirlikCarpani),
       maksStamina: oyuncuMaksStam,
       aksiyon: 'idle',
+      aktifHamleId: null,
       aksiyonKalanMs: 0,
       aksiyonToplamMs: 400,
       otomatikSayacMs: d.oyuncuIlkSayacMs,
@@ -271,6 +273,7 @@ export function dovusBaslat(
       stamina: rakipBaslangicStam,
       maksStamina: rakipMaksStam,
       aksiyon: 'idle',
+      aktifHamleId: null,
       aksiyonKalanMs: 0,
       aksiyonToplamMs: 400,
       otomatikSayacMs: rakipIlkSayacMs,
@@ -352,6 +355,7 @@ export function oyuncuHamleSec(dovus: DovusDurumu, hamleId: string): DovusDurumu
           kacinmaKalanMs: 0,
           mukemmelSavunmaKalanMs: mukemmelZamanlama ? dDovus.mukemmelBlokPencereMs : 0,
           aksiyon: 'blok',
+          aktifHamleId: hamle.id,
           aksiyonKalanMs: dDovus.aksiyonBlokMs,
           aksiyonToplamMs: dDovus.aksiyonBlokMs,
           beklemeSureleri: yeniBeklemeler,
@@ -380,6 +384,7 @@ export function oyuncuHamleSec(dovus: DovusDurumu, hamleId: string): DovusDurumu
         mukemmelSavunmaKalanMs: mukemmelZamanlama ? sure : 0,
         blokKalanMs: 0,
         aksiyon: 'kacinma',
+        aktifHamleId: hamle.id,
         aksiyonKalanMs: sure,
         aksiyonToplamMs: sure,
         beklemeSureleri: yeniBeklemeler,
@@ -525,6 +530,7 @@ function dovuscuTick(d: DovuscuDurumu, dtMs: number): DovuscuDurumu {
     stamina: yeniStamina,
     yavasladiMi: yeniStamina / Math.max(1, d.maksStamina) < dengeDovus.yavaslamaStaminaOran,
     aksiyon,
+    aktifHamleId: aksiyon === 'idle' ? null : (d.aktifHamleId ?? null),
     aksiyonKalanMs,
     blokKalanMs: Math.max(0, d.blokKalanMs - dtMs),
     kacinmaKalanMs: Math.max(0, d.kacinmaKalanMs - dtMs),
@@ -566,6 +572,7 @@ function saldiriCoz(
     siraHamleId: null,
     hazirlananHamleId: null,
     aksiyon: hamle.tur === 'tekme' ? 'tekme' : 'yumruk',
+    aktifHamleId: hamle.id,
     aksiyonKalanMs: gucSaldiriSure,
     aksiyonToplamMs: gucSaldiriSure,
     beklemeSureleri: {
@@ -872,6 +879,7 @@ function saldiriCoz(
       mukemmelSavunmaKalanMs: mukemmelBlokMu ? 0 : savunan.mukemmelSavunmaKalanMs,
       darbeFlasMs: bloktaMi ? 110 : 190,
       aksiyon: koOlduMu ? 'ko' : bloktaMi ? 'blok' : 'darbe_aldi',
+      aktifHamleId: koOlduMu ? null : bloktaMi ? (savunan.aktifHamleId ?? null) : null,
       aksiyonKalanMs: koOlduMu ? 9999 : 250,
       aksiyonToplamMs: 250,
     },

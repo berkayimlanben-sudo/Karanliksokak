@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { HAMLE_LISTESI } from '../data/gameData';
+import { DENGE } from '../game/balance';
 import { DovuscuDurumu, DovusDurumu } from '../game/combat';
 import {
   KEREM_BLOCK,
@@ -14,15 +15,16 @@ import {
   KEREM_PUNCH_1,
   KEREM_PUNCH_2,
   keremPaletiOlustur,
-  pikselSpriteCiz,
   PikselSprite,
 } from '../game/pixelSprites';
 import {
-  hariciSpriteCiz,
-  hariciSpriteHazirMi,
-  hariciSpriteKaresiAl,
-  HariciSpriteKaresi,
-  hedefEkranOlcegiHesapla,
+  karakterCizimPlaniHazirla,
+  KarakterCizimPlani,
+  karakterEskiPikselKatmaniCiz,
+  karakterHariciKatmaniCiz,
+} from '../game/characterRenderer';
+import {
+  hamleSpriteAksiyonuBul,
   spriteAtlasDinleyicisiniKaldir,
   spriteAtlasOnYukle,
   SpriteAksiyonId,
@@ -31,16 +33,6 @@ import { hitStopAktifMi, reducedMotionAlgilandiMi } from '../game/effects';
 import { TEMA } from '../game/theme';
 
 const HAMLE_TURU_HARITASI = new Map(HAMLE_LISTESI.map((h) => [h.id, h.tur]));
-
-function hariciAksiyonCozumle(aksiyon: DovuscuDurumu['aksiyon'], can: number): SpriteAksiyonId {
-  if (aksiyon === 'ko' || can <= 0) return 'ko';
-  if (aksiyon === 'darbe_aldi') return 'hit';
-  if (aksiyon === 'blok') return 'block';
-  if (aksiyon === 'kacinma') return 'dodge';
-  if (aksiyon === 'yumruk') return 'punch';
-  if (aksiyon === 'tekme') return 'kick';
-  return 'idle';
-}
 
 interface ArenaCombatCanvasProps {
   dovusRef: React.RefObject<DovusDurumu>;
@@ -259,18 +251,25 @@ export const ArenaCombatCanvas: React.FC<ArenaCombatCanvasProps> = ({
       const d = dovusRef.current;
       pCtx.drawImage(bgCanvas, 0, 0);
 
-      let oyuncuHariciKare: HariciSpriteKaresi | null = null;
-      let oyuncuHariciHazir = false;
+      let oyuncuPlan: KarakterCizimPlani | null = null;
+      let rakipPlan: KarakterCizimPlani | null = null;
+      let oyuncuAksiyon: SpriteAksiyonId = 'idle';
+      let rakipAksiyon: SpriteAksiyonId = 'idle';
+      let oyuncuOran = 0;
+      let rakipOran = 0;
       let oyuncuMerkezX = 0;
+      let rakipMerkezX = 0;
       let oyuncuZeminY = 0;
-      let oyuncuOfsetX = 0;
+      let rakipTelgrafOfsetX = 0;
+      let animElapsed = 0;
+      let zeminY = vh - Math.max(18, Math.round(vh * 0.2));
 
       if (d) {
-        const zeminY = vh - Math.max(18, Math.round(vh * 0.2));
+        zeminY = vh - Math.max(18, Math.round(vh * 0.2));
         const merkezX = Math.round(vw * 0.5);
 
         // 1. Dövüşçüleri çiz (yakın mesafe karşı karşıya)
-        const animElapsed = reducedMotion ? 0 : elapsed;
+        animElapsed = reducedMotion ? 0 : elapsed;
         const oyuncuPoz = spriteSec(d.oyuncu, animElapsed);
         const rakipPoz = spriteSec(d.rakip, reducedMotion ? 0 : animElapsed + 0.35);
 
@@ -287,24 +286,63 @@ export const ArenaCombatCanvas: React.FC<ArenaCombatCanvasProps> = ({
         const rakipBaseX = merkezX + Math.round(4 * spriteOlcek);
 
         const oX = oyuncuBaseX + oyuncuPoz.ofsetX;
-        const rX = rakipBaseX - rakipPoz.ofsetX + (telgrafAktif && !reducedMotion ? 2 : 0);
+        rakipTelgrafOfsetX = telgrafAktif && !reducedMotion ? 2 : 0;
+        const rX = rakipBaseX - rakipPoz.ofsetX + rakipTelgrafOfsetX;
         const oY = zeminY + 4;
         const rY = zeminY + 4;
 
-        const oyuncuAksiyon = hariciAksiyonCozumle(d.oyuncu.aksiyon, d.oyuncu.can);
-        const oyuncuKareIndex = Math.floor(animElapsed * 2.4) % 2;
-        oyuncuHariciKare = hariciSpriteKaresiAl('kerem', oyuncuAksiyon, oyuncuKareIndex);
-        oyuncuHariciHazir = oyuncuHariciKare ? hariciSpriteHazirMi(oyuncuHariciKare) !== null : false;
-        oyuncuMerkezX = oyuncuBaseX + 8 * spriteOlcek;
-        oyuncuZeminY = zeminY + 1;
-        oyuncuOfsetX = oyuncuPoz.ofsetX;
+        oyuncuAksiyon = hamleSpriteAksiyonuBul(
+          d.oyuncu.aktifHamleId,
+          d.oyuncu.aksiyon,
+          d.oyuncu.can
+        );
+        rakipAksiyon = hamleSpriteAksiyonuBul(
+          d.rakip.aktifHamleId,
+          d.rakip.aksiyon,
+          d.rakip.can
+        );
+        const koToplam = Math.max(1, DENGE.dovus.koYavaslatmaMs);
+        const koOran =
+          d.durum === 'bitti'
+            ? 1
+            : Math.max(0, Math.min(1, 1 - d.koYavaslatmaKalanMs / koToplam));
+        const oyuncuHamOran = 1 - d.oyuncu.aksiyonKalanMs / Math.max(1, d.oyuncu.aksiyonToplamMs);
+        const rakipHamOran = 1 - d.rakip.aksiyonKalanMs / Math.max(1, d.rakip.aksiyonToplamMs);
+        const oyuncuSaldiriMi =
+          oyuncuAksiyon.startsWith('punch') || oyuncuAksiyon.startsWith('kick');
+        const rakipSaldiriMi =
+          rakipAksiyon.startsWith('punch') || rakipAksiyon.startsWith('kick');
+        oyuncuOran =
+          oyuncuAksiyon === 'ko'
+            ? koOran
+            : oyuncuSaldiriMi
+              ? 0.35 + oyuncuHamOran * 0.65
+              : oyuncuHamOran;
+        rakipOran =
+          rakipAksiyon === 'ko'
+            ? koOran
+            : rakipSaldiriMi
+              ? 0.35 + rakipHamOran * 0.65
+              : rakipHamOran;
 
-        // Zemin gölgeleri
-        pCtx.fillStyle = 'rgba(0, 0, 0, 0.58)';
-        if (!oyuncuHariciHazir) {
-          pCtx.fillRect(oX + 2 * spriteOlcek, zeminY + 1, 13 * spriteOlcek, 3);
-        }
-        pCtx.fillRect(rX + 2 * spriteOlcek, zeminY + 1, 13 * spriteOlcek, 3);
+        oyuncuPlan = karakterCizimPlaniHazirla({
+          karakterId: 'kerem',
+          aksiyon: oyuncuAksiyon,
+          gecenSureSn: animElapsed,
+          ilerlemeOrani: oyuncuOran,
+          reducedMotion,
+        });
+        rakipPlan = karakterCizimPlaniHazirla({
+          karakterId: d.rakipId,
+          aksiyon: rakipAksiyon,
+          gecenSureSn: reducedMotion ? 0 : animElapsed + 0.35,
+          ilerlemeOrani: rakipOran,
+          reducedMotion,
+        });
+
+        oyuncuMerkezX = oyuncuBaseX + 8 * spriteOlcek;
+        rakipMerkezX = rakipBaseX + 8 * spriteOlcek;
+        oyuncuZeminY = zeminY + 1;
 
         // Rakip saldırı hazırlığı (telgraf) yumruk parıltısı
         if (telgrafAktif) {
@@ -315,31 +353,36 @@ export const ArenaCombatCanvas: React.FC<ArenaCombatCanvasProps> = ({
           pCtx.fillRect(rX - 2, zeminY - 17 * spriteOlcek, 4, 8 * spriteOlcek);
         }
 
-        // Oyuncu sprite (henüz harici PNG yoksa eski piksel ızgarasına düşer)
-        if (!oyuncuHariciHazir) {
-          pikselSpriteCiz(
+        // Harici atlası olmayan veya görseli yüklenemeyen karakterler eski piksel katmanından çizilir
+        if (!oyuncuPlan.hariciAktif) {
+          karakterEskiPikselKatmaniCiz({
             pCtx,
-            oyuncuPoz.sprite,
-            keremPaletiOlustur(d.oyuncu.gorunum),
-            oX,
-            oY,
+            sprite: oyuncuPoz.sprite,
+            palet: keremPaletiOlustur(d.oyuncu.gorunum),
+            x: oX,
+            y: oY,
             spriteOlcek,
-            false,
-            d.oyuncu.darbeFlasMs > 0
-          );
+            tersCevir: false,
+            beyazFlas: d.oyuncu.darbeFlasMs > 0,
+            golgeY: zeminY + 1,
+            golgeAlfa: 0.58,
+          });
         }
 
-        // Rakip sprite (sola bakar)
-        pikselSpriteCiz(
-          pCtx,
-          rakipPoz.sprite,
-          keremPaletiOlustur(d.rakip.gorunum),
-          rX,
-          rY,
-          spriteOlcek,
-          true,
-          d.rakip.darbeFlasMs > 0
-        );
+        if (!rakipPlan.hariciAktif) {
+          karakterEskiPikselKatmaniCiz({
+            pCtx,
+            sprite: rakipPoz.sprite,
+            palet: keremPaletiOlustur(d.rakip.gorunum),
+            x: rX,
+            y: rY,
+            spriteOlcek,
+            tersCevir: true,
+            beyazFlas: d.rakip.darbeFlasMs > 0,
+            golgeY: zeminY + 1,
+            golgeAlfa: 0.58,
+          });
+        }
 
         // Rakip tepesinde pixel `!` saldırı telgrafı
         if (telgrafAktif) {
@@ -353,9 +396,9 @@ export const ArenaCombatCanvas: React.FC<ArenaCombatCanvasProps> = ({
           pCtx.fillRect(unlemX, unlemY + 6, 2, 2);
         }
 
-        // Vuruş çarpma kıvılcımı
-        if (d.rakip.darbeFlasMs > 0 || d.oyuncu.darbeFlasMs > 0) {
-          const darbeX = d.rakip.darbeFlasMs > 0 ? rX + 4 * spriteOlcek : oX + 10 * spriteOlcek;
+        // Vuruş çarpma kıvılcımı (yalnızca eski piksel yedeğindeki dövüşçü için pCtx üzerinde)
+        if ((!rakipPlan.hariciAktif && d.rakip.darbeFlasMs > 0) || (!oyuncuPlan.hariciAktif && d.oyuncu.darbeFlasMs > 0)) {
+          const darbeX = !rakipPlan.hariciAktif && d.rakip.darbeFlasMs > 0 ? rX + 4 * spriteOlcek : oX + 10 * spriteOlcek;
           const darbeY = zeminY - 14 * spriteOlcek;
           pCtx.fillStyle = '#EAECEF';
           pCtx.fillRect(darbeX - 4, darbeY, 8, 1);
@@ -365,15 +408,15 @@ export const ArenaCombatCanvas: React.FC<ArenaCombatCanvasProps> = ({
           pCtx.fillRect(darbeX + 2, darbeY + 2, 2, 2);
         }
 
-        // Blok / Karşı Saldırı piksel kalkan çerçevesi
-        if (d.oyuncu.blokKalanMs > 0) {
+        // Blok / Karşı Saldırı piksel kalkan çerçevesi (yalnızca eski piksel yedeği için)
+        if (!oyuncuPlan.hariciAktif && d.oyuncu.blokKalanMs > 0) {
           pCtx.fillStyle =
             (d.oyuncu.mukemmelSavunmaKalanMs ?? 0) > 0
               ? 'rgba(108, 194, 150, 0.8)'
               : 'rgba(91, 130, 184, 0.55)';
           pCtx.fillRect(oX + 14 * spriteOlcek, zeminY - 18 * spriteOlcek, 2, 12 * spriteOlcek);
         }
-        if (d.rakip.blokKalanMs > 0) {
+        if (!rakipPlan.hariciAktif && d.rakip.blokKalanMs > 0) {
           pCtx.fillStyle = 'rgba(91, 130, 184, 0.55)';
           pCtx.fillRect(rX - 2, zeminY - 18 * spriteOlcek, 2, 12 * spriteOlcek);
         }
@@ -404,7 +447,6 @@ export const ArenaCombatCanvas: React.FC<ArenaCombatCanvasProps> = ({
           gorselBar.rakipStam,
           d.rakip.yavasladiMi ? '#E34A4A' : '#D99B38'
         );
-
       }
 
       // Ana tuvale aktarım (sarsıntı artık effects.ts üzerinden ölçekli uygulanır)
@@ -412,25 +454,57 @@ export const ArenaCombatCanvas: React.FC<ArenaCombatCanvasProps> = ({
       ctx.clearRect(0, 0, displayW, displayH);
       ctx.drawImage(pixelCanvas, 0, 0, displayW, displayH);
 
-      if (d && oyuncuHariciHazir && oyuncuHariciKare) {
+      if (d) {
         const olcekX = displayW / vw;
         const olcekY = displayH / vh;
         const zeminEkranY = oyuncuZeminY * olcekY;
         const hudAltSinirPx = 28 * olcekY;
         const maksBoyPx = Math.max(44, Math.floor(zeminEkranY - hudAltSinirPx));
-        const ekranOlcegi = hedefEkranOlcegiHesapla(
-          21 * spriteOlcek * olcekY,
-          oyuncuHariciKare.icerikYuksekligi,
-          maksBoyPx
-        );
-        hariciSpriteCiz(ctx, oyuncuHariciKare, {
-          merkezEkranX: oyuncuMerkezX * olcekX,
-          zeminEkranY,
-          ekranOlcegi,
-          ekstraOfsetX: oyuncuOfsetX * olcekX,
-          beyazFlas: d.oyuncu.darbeFlasMs > 0,
-          golgeAlfa: 0.58,
-        });
+        const hedefBoyPx = 21 * spriteOlcek * olcekY;
+
+        if (oyuncuPlan?.hariciAktif) {
+          karakterHariciKatmaniCiz({
+            ctx,
+            plan: oyuncuPlan,
+            aksiyon: oyuncuAksiyon,
+            ilerlemeOrani: oyuncuOran,
+            gecenSureSn: animElapsed,
+            merkezEkranX: oyuncuMerkezX * olcekX,
+            zeminEkranY,
+            hedefBoyPx,
+            maksBoyPx,
+            olcekX,
+            olcekY,
+            tersCevir: false,
+            beyazFlas: d.oyuncu.darbeFlasMs > 0,
+            golgeAlfa: 0.58,
+            reducedMotion,
+            blokAktif: d.oyuncu.blokKalanMs > 0,
+            mukemmelBlok: (d.oyuncu.mukemmelSavunmaKalanMs ?? 0) > 0,
+          });
+        }
+
+        if (rakipPlan?.hariciAktif) {
+          karakterHariciKatmaniCiz({
+            ctx,
+            plan: rakipPlan,
+            aksiyon: rakipAksiyon,
+            ilerlemeOrani: rakipOran,
+            gecenSureSn: reducedMotion ? 0 : animElapsed + 0.35,
+            merkezEkranX: rakipMerkezX * olcekX,
+            zeminEkranY,
+            hedefBoyPx,
+            maksBoyPx,
+            olcekX,
+            olcekY,
+            ekstraOfsetX: rakipTelgrafOfsetX * olcekX,
+            tersCevir: true,
+            beyazFlas: d.rakip.darbeFlasMs > 0,
+            golgeAlfa: 0.58,
+            reducedMotion,
+            blokAktif: d.rakip.blokKalanMs > 0,
+          });
+        }
       }
 
       // Keskin metin katmanı: isimler, süre, yüzen hasar sayıları, KO mührü

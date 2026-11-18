@@ -42,6 +42,7 @@ import {
   YetenekDugumu,
 } from '../data/gameData';
 import { KarakterGorunumu, MekanId, TEMA } from './theme';
+import { DENGE } from './balance';
 
 export const KAYIT_ANAHTARI = 'karanlik_sokak_kayit_v2';
 
@@ -191,17 +192,26 @@ export function itibarDengesiUygula(
   let yeniSaygi = sinirla(mevcut.saygi + saygiDelta, 0, ITIBAR_SABITLERI.maksItibar);
   let yeniKorku = sinirla(mevcut.korku + korkuDelta, 0, ITIBAR_SABITLERI.maksItibar);
 
+  const v = DENGE.verimVeEsikler;
   // Korku yükselirken yüksek Saygı aşınır (yalnızca Saygı aynı anda artırılmıyorsa)
-  if (korkuDelta > 0 && saygiDelta <= 0 && yeniSaygi >= 10) {
+  if (korkuDelta > 0 && saygiDelta <= 0 && yeniSaygi >= v.itibarSurtunmeBaslangic) {
     const surtunme =
-      yeniSaygi >= 18 ? Math.max(1, Math.floor(korkuDelta * 0.5)) : korkuDelta >= 2 ? 1 : 0;
+      yeniSaygi >= v.itibarSurtunmeYuksekEsik
+        ? Math.max(1, Math.floor(korkuDelta * v.itibarSurtunmeCarpan))
+        : korkuDelta >= 2
+          ? 1
+          : 0;
     yeniSaygi = Math.max(0, yeniSaygi - surtunme);
   }
 
   // Saygı yükselirken yüksek Korku yumuşar (yalnızca Korku aynı anda artırılmıyorsa)
-  if (saygiDelta > 0 && korkuDelta <= 0 && yeniKorku >= 10) {
+  if (saygiDelta > 0 && korkuDelta <= 0 && yeniKorku >= v.itibarSurtunmeBaslangic) {
     const surtunme =
-      yeniKorku >= 18 ? Math.max(1, Math.floor(saygiDelta * 0.5)) : saygiDelta >= 2 ? 1 : 0;
+      yeniKorku >= v.itibarSurtunmeYuksekEsik
+        ? Math.max(1, Math.floor(saygiDelta * v.itibarSurtunmeCarpan))
+        : saygiDelta >= 2
+          ? 1
+          : 0;
     yeniKorku = Math.max(0, yeniKorku - surtunme);
   }
 
@@ -421,7 +431,7 @@ export function yeniOyunOlustur(
       saygi: 0,
       korku: 0,
     },
-    aileIliskisi: 60,
+    aileIliskisi: DENGE.baslangic.aileIliskisi,
     ahlakiSecimler: [],
     komsuDayanismaGunu: 0,
     ringTavri: 'dengeli',
@@ -681,33 +691,36 @@ export function hesaplaTuretilmisDegerler(state: OyunDurumu): TuretilmisDegerler
   const acikYetenekIds = state.acikYetenekIds ?? [];
   const ogrenilenHocaDersIds = state.ogrenilenHocaDersIds ?? [];
   const pasifler = hesaplaYetenekPasifleri(acikYetenekIds, ogrenilenHocaDersIds);
+  const v = DENGE.verimVeEsikler;
   const dayaniklilik = state.statlar.dayaniklilik.deger;
-  const maksCan = 60 + dayaniklilik * 8 + pasifler.ekMaksCan;
-  const maksStamina = 40 + dayaniklilik * 6 + pasifler.ekMaksStamina;
+  const maksCan = v.maksCanTaban + dayaniklilik * v.maksCanDayaniklilikCarpan + pasifler.ekMaksCan;
+  const maksStamina =
+    v.maksStaminaTaban + dayaniklilik * v.maksStaminaDayaniklilikCarpan + pasifler.ekMaksStamina;
 
   // Moral çarpanı (0.80 .. 1.20)
-  const moralCarpani = 0.8 + (sinirla(state.moral, 0, 100) / 100) * 0.4;
+  const moralCarpani =
+    v.moralCarpaniTaban + (sinirla(state.moral, 0, 100) / 100) * v.moralCarpaniAralik;
 
   // Uyku / yorgunluk çarpanı
   let yorgunlukCarpani = 1.0;
-  if (state.uyku <= 20 || state.yorgunluk >= 80) {
-    yorgunlukCarpani = 0.55;
-  } else if (state.uyku <= 45 || state.yorgunluk >= 50) {
-    yorgunlukCarpani = 0.78;
+  if (state.uyku <= v.uykuKritikEsik || state.yorgunluk >= v.yorgunlukKritikEsik) {
+    yorgunlukCarpani = v.uykuKritikCarpan;
+  } else if (state.uyku <= v.uykuOrtaEsik || state.yorgunluk >= v.yorgunlukOrtaEsik) {
+    yorgunlukCarpani = v.uykuOrtaCarpan;
   }
 
   // Tokluk çarpanı: açlık arttıkça antrenman verimi düşer
   let toklukCarpani = 1.0;
-  if (state.tokluk <= 15) {
-    toklukCarpani = 0.55;
-  } else if (state.tokluk <= 35) {
-    toklukCarpani = 0.78;
-  } else if (state.tokluk <= 55) {
-    toklukCarpani = 0.92;
+  if (state.tokluk <= v.toklukKritikEsik) {
+    toklukCarpani = v.toklukKritikCarpan;
+  } else if (state.tokluk <= v.toklukOrtaEsik) {
+    toklukCarpani = v.toklukOrtaCarpan;
+  } else if (state.tokluk <= v.toklukHafifEsik) {
+    toklukCarpani = v.toklukHafifCarpan;
   }
 
   // Gece geç saatte bayılma cezası
-  const cezaCarpani = state.uyuyakalmaCezasi ? 0.8 : 1.0;
+  const cezaCarpani = state.uyuyakalmaCezasi ? v.uyuyakalmaVerimCarpani : 1.0;
 
   const antrenmanVerimi =
     Math.round(moralCarpani * yorgunlukCarpani * toklukCarpani * cezaCarpani * 100) +
@@ -716,8 +729,9 @@ export function hesaplaTuretilmisDegerler(state: OyunDurumu): TuretilmisDegerler
   const mevcutEv = EV_SEVIYE_HARITASI.get(state.evSeviyesi) ?? EV_SEVIYELERI[0];
   const sonrakiEv = EV_SEVIYE_HARITASI.get(mevcutEv.seviye + 1) ?? null;
 
-  const gunDonguIndeksi = (state.gun - 1) % 7;
-  const kirayaKalanGun = 7 - gunDonguIndeksi;
+  const kiraDongu = DENGE.zaman.kiraDonguGun;
+  const gunDonguIndeksi = (state.gun - 1) % kiraDongu;
+  const kirayaKalanGun = kiraDongu - gunDonguIndeksi;
   const kiraEksikTutar = Math.max(0, mevcutEv.haftalikKira - state.para);
 
   const acikHamleIds = HAMLE_LISTESI.filter((h) =>
@@ -748,7 +762,8 @@ export function hesaplaTuretilmisDegerler(state: OyunDurumu): TuretilmisDegerler
       : korku >= ITIBAR_SABITLERI.korkuEsik1
         ? 1
         : 0;
-  const marketIndirimYuzde = saygiSeviyesi === 2 ? 25 : saygiSeviyesi === 1 ? 15 : 0;
+  const marketIndirimYuzde =
+    saygiSeviyesi === 2 ? v.marketIndirim2 : saygiSeviyesi === 1 ? v.marketIndirim1 : 0;
   const rakipCekinmeYuzde = rakipCekinmeHesapla(korku, RAKIP_LISTESI[0]).yuzde;
 
   return {
@@ -785,8 +800,10 @@ export function hesaplaTuretilmisDegerler(state: OyunDurumu): TuretilmisDegerler
  */
 export function aktifDebufflariGetir(state: OyunDurumu): AktifDebuff[] {
   const debufflar: AktifDebuff[] = [];
+  const v = DENGE.verimVeEsikler;
   const mevcutEv = EV_SEVIYE_HARITASI.get(state.evSeviyesi) ?? EV_SEVIYELERI[0];
-  const moralCarpani = 0.8 + (sinirla(state.moral, 0, 100) / 100) * 0.4;
+  const moralCarpani =
+    v.moralCarpaniTaban + (sinirla(state.moral, 0, 100) / 100) * v.moralCarpaniAralik;
 
   if (state.uyuyakalmaCezasi) {
     debufflar.push({
@@ -798,7 +815,7 @@ export function aktifDebufflariGetir(state: OyunDurumu): AktifDebuff[] {
     });
   }
 
-  if (state.tokluk <= 15) {
+  if (state.tokluk <= v.toklukKritikEsik) {
     debufflar.push({
       id: 'aclik',
       baslik: 'Açlık (Kritik)',
@@ -806,7 +823,7 @@ export function aktifDebufflariGetir(state: OyunDurumu): AktifDebuff[] {
       cozum: 'Yemek ye',
       siddet: 'kritik',
     });
-  } else if (state.tokluk < 25) {
+  } else if (state.tokluk < v.hazirlikDusukEsik) {
     debufflar.push({
       id: 'aclik',
       baslik: 'Açlık',
@@ -814,7 +831,7 @@ export function aktifDebufflariGetir(state: OyunDurumu): AktifDebuff[] {
       cozum: 'Yemek ye',
       siddet: 'kritik',
     });
-  } else if (state.tokluk <= 35) {
+  } else if (state.tokluk <= v.toklukOrtaEsik) {
     debufflar.push({
       id: 'aclik',
       baslik: 'Aç',
@@ -822,7 +839,7 @@ export function aktifDebufflariGetir(state: OyunDurumu): AktifDebuff[] {
       cozum: 'Yemek ye',
       siddet: 'uyari',
     });
-  } else if (state.tokluk <= 55) {
+  } else if (state.tokluk <= v.toklukHafifEsik) {
     debufflar.push({
       id: 'aclik',
       baslik: 'Hafif Aç',
@@ -832,7 +849,7 @@ export function aktifDebufflariGetir(state: OyunDurumu): AktifDebuff[] {
     });
   }
 
-  if (state.uyku <= 20 || state.yorgunluk >= 80) {
+  if (state.uyku <= v.uykuKritikEsik || state.yorgunluk >= v.yorgunlukKritikEsik) {
     debufflar.push({
       id: 'uyku',
       baslik: 'Bitkin',
@@ -840,7 +857,7 @@ export function aktifDebufflariGetir(state: OyunDurumu): AktifDebuff[] {
       cozum: 'Evde uyu',
       siddet: 'kritik',
     });
-  } else if (state.uyku < 25) {
+  } else if (state.uyku < v.hazirlikDusukEsik) {
     debufflar.push({
       id: 'uyku',
       baslik: 'Çok Yorgun',
@@ -848,7 +865,7 @@ export function aktifDebufflariGetir(state: OyunDurumu): AktifDebuff[] {
       cozum: 'Evde uyu',
       siddet: 'kritik',
     });
-  } else if (state.uyku <= 45 || state.yorgunluk >= 50) {
+  } else if (state.uyku <= v.uykuOrtaEsik || state.yorgunluk >= v.yorgunlukOrtaEsik) {
     debufflar.push({
       id: 'uyku',
       baslik: 'Yorgun',
@@ -858,7 +875,7 @@ export function aktifDebufflariGetir(state: OyunDurumu): AktifDebuff[] {
     });
   }
 
-  if (state.moral < 35) {
+  if (state.moral < v.dusukMoralEsik) {
     debufflar.push({
       id: 'moral',
       baslik: 'Düşük Moral',
@@ -929,14 +946,14 @@ export function rastgeleEvOlayiSec(
   const uygunlar = ardilOlmayanlar.length > 0 ? ardilOlmayanlar : filtrelenmis;
 
   // En fazla 2 gün olay çıkmadıysa garanti tetikle; aksi halde %55 olasılık
-  const garanti = state.gun - state.sonOlayGunu >= 2;
-  if (!garanti && rng() > 0.55) {
+  const garanti = state.gun - state.sonOlayGunu >= DENGE.verimVeEsikler.olayTetiklemeGunFarki;
+  if (!garanti && rng() > DENGE.verimVeEsikler.olayTetiklemeOlasilik) {
     return null;
   }
 
   // Uygun ahlaki olaylar varsa bir kısmında öne çıkar ki oyuncu ahlaki ikilemleri düzenli görsün
   const ahlakiAdaylar = uygunlar.filter((o) => o.kategori === 'ahlaki');
-  if (ahlakiAdaylar.length > 0 && rng() < 0.55) {
+  if (ahlakiAdaylar.length > 0 && rng() < DENGE.verimVeEsikler.ahlakiOlayOncelikOlasilik) {
     return ahlakiAdaylar[Math.floor(rng() * ahlakiAdaylar.length)] ?? ahlakiAdaylar[0];
   }
 
@@ -973,11 +990,12 @@ function yeniGuneGec(
     }
   }
 
+  const ek = DENGE.ekonomiVeYasam;
   let yeniPara = state.para;
   let yeniEvSeviyesi = state.evSeviyesi;
   let yeniUyariSayisi = state.kiraUyariSayisi;
   let yeniMoral = sinirla(
-    state.moral + mevcutEv.moralEtkisi + esyaMoralBonus - (bayilmaModu ? 8 : 0),
+    state.moral + mevcutEv.moralEtkisi + esyaMoralBonus - (bayilmaModu ? ek.bayilmaMoralCezasi : 0),
     0,
     100
   );
@@ -989,14 +1007,14 @@ function yeniGuneGec(
     ? SAAT_SABITLERI.uyuyakalmaSabahDakika
     : SAAT_SABITLERI.sabahBaslangicDakika;
 
-  const kiraGunuMu = state.gun % 7 === 0;
+  const kiraGunuMu = state.gun % DENGE.zaman.kiraDonguGun === 0;
   let bildirim: GunlukKayit;
 
   if (kiraGunuMu) {
     if (yeniPara >= mevcutEv.haftalikKira) {
       yeniPara -= mevcutEv.haftalikKira;
       yeniUyariSayisi = 0;
-      yeniMoral = sinirla(yeniMoral + 6, 0, 100);
+      yeniMoral = sinirla(yeniMoral + ek.kiraOdendiMoralBonus, 0, 100);
       bildirim = {
         gun: yeniGun,
         saatMetni: saatMetni(yeniSaat),
@@ -1005,7 +1023,7 @@ function yeniGuneGec(
       };
     } else if (yeniUyariSayisi === 0) {
       yeniUyariSayisi = 1;
-      yeniMoral = sinirla(yeniMoral - 15, 0, 100);
+      yeniMoral = sinirla(yeniMoral - ek.kiraIlkUyariMoralCezasi, 0, 100);
       bildirim = {
         gun: yeniGun,
         saatMetni: saatMetni(yeniSaat),
@@ -1015,7 +1033,7 @@ function yeniGuneGec(
     } else if (yeniEvSeviyesi > 0) {
       yeniEvSeviyesi -= 1;
       yeniUyariSayisi = 0;
-      yeniMoral = sinirla(yeniMoral - 18, 0, 100);
+      yeniMoral = sinirla(yeniMoral - ek.kiraDusmeMoralCezasi, 0, 100);
       const dusulenEv = EV_SEVIYELERI[yeniEvSeviyesi];
       bildirim = {
         gun: yeniGun,
@@ -1024,11 +1042,11 @@ function yeniGuneGec(
         tur: 'uyari',
       };
     } else {
-      yeniMoral = sinirla(yeniMoral - 20, 0, 100);
+      yeniMoral = sinirla(yeniMoral - ek.kiraIkinciUyariMoralCezasi, 0, 100);
       yeniItibar = {
         ...yeniItibar,
-        genel: Math.max(0, yeniItibar.genel - 1),
-        saygi: Math.max(0, yeniItibar.saygi - 1),
+        genel: Math.max(0, yeniItibar.genel - ek.kiraIkinciUyariItibarKaybi),
+        saygi: Math.max(0, yeniItibar.saygi - ek.kiraIkinciUyariItibarKaybi),
       };
       bildirim = {
         gun: yeniGun,
@@ -1063,7 +1081,7 @@ function yeniGuneGec(
   );
 
   const hedefEnerji = bayilmaModu
-    ? 68
+    ? ek.bayilmaEnerjiHedefi
     : guncelEv.gunlukEnerjiToparlanma +
       dayaniklilikBonus +
       esyaEnerjiBonus +
@@ -1071,15 +1089,15 @@ function yeniGuneGec(
   const yeniEnerji = sinirla(hedefEnerji, 0, state.maksEnerji);
 
   const uykuKazanimi = bayilmaModu
-    ? 62
-    : guncelEv.yorgunlukAzaltma + dayaniklilikBonus + esyaUykuBonus + 28;
+    ? ek.bayilmaUykuKazanimi
+    : guncelEv.yorgunlukAzaltma + dayaniklilikBonus + esyaUykuBonus + ek.normalUykuTabanEk;
   const { uyku: yeniUyku, yorgunluk: yeniYorgunluk } = uykuVeYorgunlukAyarla(
     state.uyku,
     uykuKazanimi
   );
 
   // Gece boyunca hafif acıkma (ama oyuncuyu 0'da kilitlememek için taban 15)
-  const yeniTokluk = Math.max(15, state.tokluk - 12);
+  const yeniTokluk = Math.max(ek.geceToklukTaban, state.tokluk - ek.geceAclikKaybi);
 
   const yeniState: OyunDurumu = {
     ...state,
@@ -1127,7 +1145,7 @@ function zamanIlerlet(
   const gecBaslangic = Math.max(eskiSaat, SAAT_SABITLERI.geceGecEsikDakika);
   const gecBitis = Math.max(yeniSaat, SAAT_SABITLERI.geceGecEsikDakika);
   const gecDakika = Math.max(0, gecBitis - gecBaslangic);
-  const ekUykuKaybi = Math.round((gecDakika / 30) * 3);
+  const ekUykuKaybi = Math.round((gecDakika / 30) * DENGE.zaman.geceUykuKayipHer30Dk);
 
   const { uyku, yorgunluk } = uykuVeYorgunlukAyarla(state.uyku, -ekUykuKaybi);
 
@@ -1159,7 +1177,10 @@ export function mekanaGit(
 
   // Anti-ölüm sarmalı: 0 enerjide bile eve ve diğer mekanlara yürüyebil (enerji varsa düşer)
   const enerjiKaybi = Math.min(state.enerji, tanim.yolculukEnerji);
-  const { uyku, yorgunluk } = uykuVeYorgunlukAyarla(state.uyku, -2);
+  const { uyku, yorgunluk } = uykuVeYorgunlukAyarla(
+    state.uyku,
+    -DENGE.zaman.yolculukUykuKaybi
+  );
 
   const araState: OyunDurumu = {
     ...state,
@@ -1244,7 +1265,7 @@ export function antrenmanYap(
     };
   }
 
-  if (state.tokluk < 5) {
+  if (state.tokluk < DENGE.antrenman.minToklukEsigi) {
     return {
       ...state,
       sonBildirim: {
@@ -1257,14 +1278,14 @@ export function antrenmanYap(
   }
 
   // Evde kum torbasında hafif %85 verim; ağırlık seti varsa Güç & Dayanıklılık +%20
-  const evCarpani = evdeMi ? 0.85 : 1.0;
+  const evCarpani = evdeMi ? DENGE.antrenman.evTorbaVerimCarpani : 1.0;
   const esyaCarpani =
     (statId === 'guc' || statId === 'dayaniklilik') && turetilmis.gucDayaniklilikBonusYuzde > 0
       ? 1 + turetilmis.gucDayaniklilikBonusYuzde / 100
       : 1.0;
 
   const kazanilanIlerleme = Math.max(
-    12,
+    DENGE.antrenman.minIlerleme,
     Math.round(
       tanim.temelIlerleme * (turetilmis.antrenmanVerimi / 100) * evCarpani * esyaCarpani
     )
@@ -1346,20 +1367,25 @@ export function sokakGolgeBoksu(
   rng: () => number = Math.random
 ): OyunDurumu {
   if (olayEngeliVarMi(state)) return state;
-  if (state.enerji < 14) {
+  const ant = DENGE.antrenman;
+  const sure = DENGE.zaman.sokakGolgeBoksuDakika;
+  if (state.enerji < ant.sokakGolgeBoksuEnerji) {
     return {
       ...state,
       sonBildirim: {
         gun: state.gun,
         saatMetni: saatMetni(state.saatDakika),
-        metin: 'Sokakta gölge boksu için bile en az 14 EN gerek. Biraz ye ya da evde uyu.',
+        metin: `Sokakta gölge boksu için bile en az ${ant.sokakGolgeBoksuEnerji} EN gerek. Biraz ye ya da evde uyu.`,
         tur: 'uyari',
       },
     };
   }
 
   const turetilmis = hesaplaTuretilmisDegerler(state);
-  const kazanilan = Math.max(10, Math.round(24 * (turetilmis.antrenmanVerimi / 100)));
+  const kazanilan = Math.max(
+    ant.sokakGolgeBoksuMinIlerleme,
+    Math.round(ant.sokakGolgeBoksuIlerleme * (turetilmis.antrenmanVerimi / 100))
+  );
   const eskiStat = state.statlar.ceviklik;
   const toplam = eskiStat.ilerleme + kazanilan;
   const seviyeArtisi = Math.floor(toplam / 100);
@@ -1373,22 +1399,22 @@ export function sokakGolgeBoksu(
   };
 
   const esikOdul = statEsikPuanlariniKontrolEt(yeniStatlar, state.kazanilanStatEsikleri ?? []);
-  const { uyku, yorgunluk } = uykuVeYorgunlukAyarla(state.uyku, -10);
+  const { uyku, yorgunluk } = uykuVeYorgunlukAyarla(state.uyku, -ant.sokakGolgeBoksuUykuKaybi);
   const temelMetin =
     seviyeArtisi > 0
       ? `Sokak lambası altında gölge boksu! Çeviklik ${eskiStat.deger + seviyeArtisi} seviyesine çıktı.`
       : `Sokak lambası altında ücretsiz gölge boksu yaptın: Çeviklik +${kazanilan}%.`;
   const kayit: GunlukKayit = {
     gun: state.gun,
-    saatMetni: saatMetni(state.saatDakika + 45),
+    saatMetni: saatMetni(state.saatDakika + sure),
     metin: temelMetin + esikOdul.mesajNotu,
     tur: seviyeArtisi > 0 || esikOdul.ekPuan > 0 ? 'basari' : 'bilgi',
   };
 
   const araState: OyunDurumu = {
     ...state,
-    enerji: sinirla(state.enerji - 14, 0, state.maksEnerji),
-    tokluk: sinirla(state.tokluk - 8, 0, 100),
+    enerji: sinirla(state.enerji - ant.sokakGolgeBoksuEnerji, 0, state.maksEnerji),
+    tokluk: sinirla(state.tokluk - ant.sokakGolgeBoksuTokluk, 0, 100),
     uyku,
     yorgunluk,
     statlar: yeniStatlar,
@@ -1398,7 +1424,7 @@ export function sokakGolgeBoksu(
     gecmis: gecmiseEkle(state.gecmis, kayit),
   };
 
-  return zamanIlerlet(araState, 45, rng);
+  return zamanIlerlet(araState, sure, rng);
 }
 
 /**
@@ -1450,8 +1476,8 @@ export function vardiyaYap(
   }
 
   const arbedeOlduMu = Boolean(is.riskOrani && rng() < is.riskOrani);
-  const ekEnerjiKaybi = arbedeOlduMu ? 14 : 0;
-  const ekUykuKaybi = arbedeOlduMu ? 12 : 0;
+  const ekEnerjiKaybi = arbedeOlduMu ? DENGE.ekonomiVeYasam.arbedeEkEnerjiKaybi : 0;
+  const ekUykuKaybi = arbedeOlduMu ? DENGE.ekonomiVeYasam.arbedeEkUykuKaybi : 0;
 
   const { uyku, yorgunluk } = uykuVeYorgunlukAyarla(
     state.uyku,
@@ -1473,7 +1499,7 @@ export function vardiyaYap(
       : '';
 
   const mesaj = arbedeOlduMu
-    ? `${is.isim} sırasında arbede çıktı! +${is.paraOdulu} ₺ aldın ama -14 EN, -12 Uyku kaybettin.`
+    ? `${is.isim} sırasında arbede çıktı! +${is.paraOdulu} ₺ aldın ama -${ekEnerjiKaybi} EN, -${ekUykuKaybi} Uyku kaybettin.`
     : `${is.isim} tamamlandı (${is.sureDakika} dk). Cebine +${is.paraOdulu} ₺ girdi.${itibarNotu ? ` (${itibarNotu})` : ''}`;
 
   const kayit: GunlukKayit = {
@@ -1580,7 +1606,9 @@ export function acilCorbaIc(
   rng: () => number = Math.random
 ): OyunDurumu {
   if (olayEngeliVarMi(state)) return state;
-  if (state.para >= 35 || state.buzdolabiStok > 0 || state.tokluk >= 50) {
+  const ek = DENGE.ekonomiVeYasam;
+  const corbaSure = DENGE.zaman.acilCorbaDakika;
+  if (state.para >= ek.acilCorbaMaxPara || state.buzdolabiStok > 0 || state.tokluk >= ek.acilCorbaMaxTokluk) {
     return {
       ...state,
       sonBildirim: {
@@ -1594,22 +1622,22 @@ export function acilCorbaIc(
 
   const kayit: GunlukKayit = {
     gun: state.gun,
-    saatMetni: saatMetni(state.saatDakika + 20),
+    saatMetni: saatMetni(state.saatDakika + corbaSure),
     metin:
-      'Emine mutfakta kalan mercimekle sıcak bir kase çorba uzattı: "Ayakta kal yeter Kerem." (+38 Tokluk, +20 EN)',
+      `Emine mutfakta kalan mercimekle sıcak bir kase çorba uzattı: "Ayakta kal yeter Kerem." (+${ek.acilCorbaTokluk} Tokluk, +${ek.acilCorbaEnerji} EN)`,
     tur: 'basari',
   };
 
   const araState: OyunDurumu = {
     ...state,
-    tokluk: sinirla(state.tokluk + 38, 0, 100),
-    enerji: sinirla(state.enerji + 20, 0, state.maksEnerji),
-    moral: sinirla(state.moral + 4, 0, 100),
+    tokluk: sinirla(state.tokluk + ek.acilCorbaTokluk, 0, 100),
+    enerji: sinirla(state.enerji + ek.acilCorbaEnerji, 0, state.maksEnerji),
+    moral: sinirla(state.moral + ek.acilCorbaMoral, 0, 100),
     sonBildirim: kayit,
     gecmis: gecmiseEkle(state.gecmis, kayit),
   };
 
-  return zamanIlerlet(araState, 20, rng);
+  return zamanIlerlet(araState, corbaSure, rng);
 }
 
 /**
@@ -1622,11 +1650,14 @@ export function aileyleEtkiles(
   rng: () => number = Math.random
 ): OyunDurumu {
   if (olayEngeliVarMi(state)) return state;
+  const ek = DENGE.ekonomiVeYasam;
+  const aileSure = DENGE.zaman.aileEtkilesimDakika;
   const secimler = state.ahlakiSecimler ?? [];
   const korkuBaskin =
-    state.itibar.korku >= 12 && state.itibar.korku > state.itibar.saygi;
-  const saygiYuksek = state.itibar.saygi >= 12;
-  const aileBağı = state.aileIliskisi ?? 60;
+    state.itibar.korku >= ITIBAR_SABITLERI.korkuEsik1 &&
+    state.itibar.korku > state.itibar.saygi;
+  const saygiYuksek = state.itibar.saygi >= ITIBAR_SABITLERI.saygiEsik1;
+  const aileBağı = state.aileIliskisi ?? DENGE.baslangic.aileIliskisi;
 
   if (uyeId === 'anne_emine') {
     if (state.anneKonusmaGunu === state.gun) {
@@ -1663,21 +1694,21 @@ export function aileyleEtkiles(
     const yeniItibar = itibarDengesiUygula(state.itibar, { saygiDelta: 1 });
     const kayit: GunlukKayit = {
       gun: state.gun,
-      saatMetni: saatMetni(state.saatDakika + 20),
-      metin: `${secilen} (+7 Moral, +1 Saygı)`,
+      saatMetni: saatMetni(state.saatDakika + aileSure),
+      metin: `${secilen} (+${ek.anneMoral} Moral, +1 Saygı)`,
       tur: 'basari',
     };
 
     const araState: OyunDurumu = {
       ...state,
       anneKonusmaGunu: state.gun,
-      moral: sinirla(state.moral + 7, 0, 100),
-      aileIliskisi: sinirla(aileBağı + 2, 0, 100),
+      moral: sinirla(state.moral + ek.anneMoral, 0, 100),
+      aileIliskisi: sinirla(aileBağı + ek.aileIliskiArtis, 0, 100),
       itibar: yeniItibar,
       sonBildirim: kayit,
       gecmis: gecmiseEkle(state.gecmis, kayit),
     };
-    return zamanIlerlet(araState, 20, rng);
+    return zamanIlerlet(araState, aileSure, rng);
   }
 
   if (state.elifKonusmaGunu === state.gun) {
@@ -1711,21 +1742,21 @@ export function aileyleEtkiles(
   const yeniItibar = itibarDengesiUygula(state.itibar, { saygiDelta: 1 });
   const kayit: GunlukKayit = {
     gun: state.gun,
-    saatMetni: saatMetni(state.saatDakika + 20),
-    metin: `${secilen} (+6 Moral, +1 Saygı)`,
+    saatMetni: saatMetni(state.saatDakika + aileSure),
+    metin: `${secilen} (+${ek.elifMoral} Moral, +1 Saygı)`,
     tur: 'basari',
   };
 
   const araState: OyunDurumu = {
     ...state,
     elifKonusmaGunu: state.gun,
-    moral: sinirla(state.moral + 6, 0, 100),
-    aileIliskisi: sinirla(aileBağı + 2, 0, 100),
+    moral: sinirla(state.moral + ek.elifMoral, 0, 100),
+    aileIliskisi: sinirla(aileBağı + ek.aileIliskiArtis, 0, 100),
     itibar: yeniItibar,
     sonBildirim: kayit,
     gecmis: gecmiseEkle(state.gecmis, kayit),
   };
-  return zamanIlerlet(araState, 20, rng);
+  return zamanIlerlet(araState, aileSure, rng);
 }
 
 /**
@@ -1784,7 +1815,7 @@ export function evEsyasiAl(state: OyunDurumu, esyaId: string): OyunDurumu {
     ...state,
     para: state.para - esya.fiyat,
     evEsyalari: [...state.evEsyalari, esya.id],
-    moral: sinirla(state.moral + 4, 0, 100),
+    moral: sinirla(state.moral + DENGE.ekonomiVeYasam.evEsyasiMoralBonus, 0, 100),
     sonBildirim: kayit,
     gecmis: gecmiseEkle(state.gecmis, kayit),
   };
@@ -1834,7 +1865,7 @@ export function evYukselt(state: OyunDurumu): OyunDurumu {
     para: state.para - sonrakiEv.yukseltmeMaliyeti,
     evSeviyesi: sonrakiEv.seviye,
     kiraUyariSayisi: 0,
-    moral: sinirla(state.moral + 12, 0, 100),
+    moral: sinirla(state.moral + DENGE.ekonomiVeYasam.evYukseltMoralBonus, 0, 100),
     sonBildirim: kayit,
     gecmis: gecmiseEkle(state.gecmis, kayit),
   };
@@ -1997,7 +2028,7 @@ export function macaGirilebilirMi(state: OyunDurumu): { uygun: boolean; neden?: 
       neden: `Maç için en az ${DOVUS_SABITLERI.macEnerjiMaliyeti} EN gerekiyor.`,
     };
   }
-  if (state.tokluk < 10) {
+  if (state.tokluk < DENGE.dovus.minToklukEsigi) {
     return {
       uygun: false,
       neden: 'Açlıktan ayakta duramıyorsun; dövüşten önce biraz yemek yemelisin.',
@@ -2040,6 +2071,7 @@ export function dovusSonucunuUygula(
   let statPuan = 14;
   let statNotu = 'Dayanıklılık +14%';
 
+  const dDenge = DENGE.dovus;
   if (kazanan === 'oyuncu') {
     paraDegisimi = rakip.paraOdulu;
     itibarDegisimi = rakip.itibarOdulu + (ilkGalibiyetMi ? 1 : 0);
@@ -2053,27 +2085,27 @@ export function dovusSonucunuUygula(
       hamSaygiDelta = Math.ceil(rakip.itibarOdulu * 0.6);
       hamKorkuDelta = Math.max(1, Math.floor(rakip.itibarOdulu * 0.5));
     }
-    moralDegisimi = 10;
+    moralDegisimi = dDenge.kazanmaMoral;
     statId = rakip.tarz === 'cevik' ? 'ceviklik' : 'guc';
-    statPuan = 16;
-    statNotu = `${statId === 'ceviklik' ? 'Çeviklik' : 'Güç'} +16%`;
+    statPuan = dDenge.kazanmaStatPuan;
+    statNotu = `${statId === 'ceviklik' ? 'Çeviklik' : 'Güç'} +${statPuan}%`;
   } else if (kazanan === 'berabere') {
-    paraDegisimi = Math.round(rakip.paraOdulu * 0.4);
+    paraDegisimi = Math.round(rakip.paraOdulu * dDenge.berabereParaOran);
     itibarDegisimi = 1;
     hamSaygiDelta = 1;
     hamKorkuDelta = tavir === 'sert' ? 1 : 0;
-    moralDegisimi = -2;
+    moralDegisimi = dDenge.berabereMoral;
     statId = 'refleks';
-    statPuan = 15;
-    statNotu = 'Refleks +15%';
+    statPuan = dDenge.berabereStatPuan;
+    statNotu = `Refleks +${statPuan}%`;
   } else {
     paraDegisimi = rakip.teselliPara;
     itibarDegisimi = 0;
     hamSaygiDelta = tavir === 'temiz' ? 1 : 0;
-    moralDegisimi = -8;
+    moralDegisimi = dDenge.kaybetmeMoral;
     statId = 'dayaniklilik';
-    statPuan = 15;
-    statNotu = 'Dayanıklılık +15%';
+    statPuan = dDenge.kaybetmeStatPuan;
+    statNotu = `Dayanıklılık +${statPuan}%`;
   }
 
   const eskiStat = state.statlar[statId];
@@ -2612,25 +2644,27 @@ export function komsuDayanismasiAl(
     };
   }
 
+  const ek = DENGE.ekonomiVeYasam;
+  const sure = DENGE.zaman.komsuDayanismaDakika;
   const kayit: GunlukKayit = {
     gun: state.gun,
-    saatMetni: saatMetni(state.saatDakika + 15),
+    saatMetni: saatMetni(state.saatDakika + sure),
     metin:
-      'Alt kattan Şükran Teyze ile Bakkal Rıza kapıya sıcak yemek ve zarf içinde harçlık bıraktı (+1 Ev Yemeği, +35 ₺, +5 Moral).',
+      `Alt kattan Şükran Teyze ile Bakkal Rıza kapıya sıcak yemek ve zarf içinde harçlık bıraktı (+${ek.komsuDayanismaStok} Ev Yemeği, +${ek.komsuDayanismaPara} ₺, +${ek.komsuDayanismaMoral} Moral).`,
     tur: 'basari',
   };
 
   const araState: OyunDurumu = {
     ...state,
-    buzdolabiStok: state.buzdolabiStok + 1,
-    para: state.para + 35,
-    moral: sinirla(state.moral + 5, 0, 100),
+    buzdolabiStok: state.buzdolabiStok + ek.komsuDayanismaStok,
+    para: state.para + ek.komsuDayanismaPara,
+    moral: sinirla(state.moral + ek.komsuDayanismaMoral, 0, 100),
     komsuDayanismaGunu: state.gun,
     sonBildirim: kayit,
     gecmis: gecmiseEkle(state.gecmis, kayit),
   };
 
-  return zamanIlerlet(araState, 15, rng);
+  return zamanIlerlet(araState, sure, rng);
 }
 
 /**
@@ -2813,7 +2847,10 @@ export function durumuYukle(): OyunDurumu | null {
       komsuSecimleri: Array.isArray(ayrilmis.komsuSecimleri) ? ayrilmis.komsuSecimleri : [],
       komsuBayraklari: Array.isArray(ayrilmis.komsuBayraklari) ? ayrilmis.komsuBayraklari : [],
       aktifKomsuOlayi: ayrilmis.aktifKomsuOlayi ?? null,
-      aileIliskisi: typeof ayrilmis.aileIliskisi === 'number' ? ayrilmis.aileIliskisi : 60,
+      aileIliskisi:
+        typeof ayrilmis.aileIliskisi === 'number'
+          ? ayrilmis.aileIliskisi
+          : DENGE.baslangic.aileIliskisi,
       ahlakiSecimler: Array.isArray(ayrilmis.ahlakiSecimler) ? ayrilmis.ahlakiSecimler : [],
       komsuDayanismaGunu:
         typeof ayrilmis.komsuDayanismaGunu === 'number' ? ayrilmis.komsuDayanismaGunu : 0,

@@ -1,20 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
 import { KARAKTER_SABITLERI, RAKIP_LISTESI, RakipTanimi, StatId } from './data/gameData';
+import { DENGE, dengeAboneOl } from './game/balance';
 import {
-  acilCorbaIc,
-  aileyleEtkiles,
-  antrenmanYap,
-  dovusSonucunuUygula,
   durumuKaydet,
   durumuYukle,
   evdeUyuVeGunuBitir,
-  evEsyasiAl,
-  evYukselt,
-  hocaDersiAl,
   kaydiSil,
-  komsuDayanismasiAl,
-  komsuEtkilesimiBaslat,
-  komsuSecenegiUygula,
   macaGirilebilirMi,
   MacSonucOzeti,
   mekanaGit,
@@ -27,7 +18,18 @@ import {
   yemekYe,
   yeniOyunOlustur,
   yetenekAc,
+  acilCorbaIc,
+  aileyleEtkiles,
+  antrenmanYap,
+  dovusSonucunuUygula,
+  evEsyasiAl,
+  evYukselt,
+  hocaDersiAl,
+  komsuDayanismasiAl,
+  komsuEtkilesimiBaslat,
+  komsuSecenegiUygula,
 } from './game/engine';
+import { telemetriDovusSonucuLogla, telemetriDurumFarkiniLogla } from './game/telemetry';
 import { MekanId, temaDegiskenleriniUygula } from './game/theme';
 import { getSesAyarlari, mute, MuzikRuhHali, playMusic, playSfx } from './game/sound';
 import { TitleScreen } from './components/TitleScreen';
@@ -55,6 +57,14 @@ export default function App() {
     return null;
   });
   const [aktifRakip, setAktifRakip] = useState<RakipTanimi | null>(null);
+  const [, setDengeRevizyon] = useState(0);
+
+  // Canlı denge değişikliklerinde bileşeni yeniden çiz
+  useEffect(() => {
+    return dengeAboneOl(() => {
+      setDengeRevizyon((r) => r + 1);
+    });
+  }, []);
 
   // Tema CSS değişkenlerini yükleme anında uygula
   useEffect(() => {
@@ -131,9 +141,19 @@ export default function App() {
     setOyunDurumu(null);
   }, []);
 
-  const durumGuncelle = useCallback((fn: (onceki: OyunDurumu) => OyunDurumu) => {
-    setOyunDurumu((onceki) => (onceki ? fn(onceki) : onceki));
-  }, []);
+  const durumGuncelle = useCallback(
+    (fn: (onceki: OyunDurumu) => OyunDurumu, kaynak = 'aksiyon') => {
+      setOyunDurumu((onceki) => {
+        if (!onceki) return onceki;
+        const sonraki = fn(onceki);
+        if (sonraki !== onceki) {
+          telemetriDurumFarkiniLogla(onceki, sonraki, kaynak);
+        }
+        return sonraki;
+      });
+    },
+    []
+  );
 
   const handleMacaBasla = useCallback(
     (rakipId: string) => {
@@ -164,6 +184,8 @@ export default function App() {
         aktifRakip.id,
         kazanan
       );
+      telemetriDurumFarkiniLogla(oyunDurumu, yeniDurum, 'dovus');
+      telemetriDovusSonucuLogla(yeniDurum, aktifRakip.id, ozet);
       setOyunDurumu(yeniDurum);
       return ozet;
     },
@@ -173,6 +195,51 @@ export default function App() {
   const handleArenadanCik = useCallback(() => {
     setAktifRakip(null);
   }, []);
+
+  const handleDebugDurumAyarla = useCallback(
+    (yeniDurum: OyunDurumu, kaynak = 'debug_manuel') => {
+      durumGuncelle(() => yeniDurum, kaynak);
+    },
+    [durumGuncelle]
+  );
+
+  const handleDebugAnindaGunBitir = useCallback(() => {
+    durumGuncelle((onceki) => {
+      const engelsiz: OyunDurumu =
+        onceki.aktifOlay || onceki.aktifKomsuOlayi
+          ? { ...onceki, aktifOlay: null, aktifKomsuOlayi: null }
+          : onceki;
+      return evdeUyuVeGunuBitir(engelsiz);
+    }, 'debug_gun_bitir');
+  }, [durumGuncelle]);
+
+  const handleDebugKiraGununeAtla = useCallback(() => {
+    durumGuncelle((onceki) => {
+      const dongu = Math.max(1, DENGE.zaman.kiraDonguGun);
+      const kalan = onceki.gun % dongu === 0 ? dongu : dongu - (onceki.gun % dongu);
+      const hedefGun = onceki.gun + kalan;
+      return {
+        ...onceki,
+        gun: hedefGun,
+        aktifOlay: null,
+        aktifKomsuOlayi: null,
+        sonBildirim: {
+          gun: hedefGun,
+          saatMetni: onceki.sonBildirim?.saatMetni,
+          metin: `[DEBUG] Gün ${hedefGun} (kira günü) olarak ayarlandı. Uyuyunca kira kesilir.`,
+          tur: 'bilgi',
+        },
+      };
+    }, 'debug_kira_atla');
+  }, [durumGuncelle]);
+
+  const handleDebugZorlaMacBaslat = useCallback(
+    (rakip: RakipTanimi) => {
+      if (!oyunDurumu) return;
+      setAktifRakip(rakip);
+    },
+    [oyunDurumu]
+  );
 
   const aktifEkran = !oyunDurumu ? (
     <TitleScreen
@@ -191,37 +258,51 @@ export default function App() {
     <HomeHub
       state={oyunDurumu}
       onMekanaGit={(hedefMekan: MekanId) =>
-        durumGuncelle((s) => mekanaGit(s, hedefMekan))
+        durumGuncelle((s) => mekanaGit(s, hedefMekan), 'yolculuk')
       }
       onAntrenman={(statId: StatId, secenek) =>
-        durumGuncelle((s) => antrenmanYap(s, statId, secenek))
+        durumGuncelle((s) => antrenmanYap(s, statId, secenek), 'antrenman')
       }
-      onSokakGolgeBoksu={() => durumGuncelle((s) => sokakGolgeBoksu(s))}
-      onVardiya={(isId: string) => durumGuncelle((s) => vardiyaYap(s, isId))}
-      onYemek={(yemekId: string) => durumGuncelle((s) => yemekYe(s, yemekId))}
-      onAcilCorba={() => durumGuncelle((s) => acilCorbaIc(s))}
-      onAileEtkiles={(uyeId) => durumGuncelle((s) => aileyleEtkiles(s, uyeId))}
-      onEvEsyasiAl={(esyaId: string) => durumGuncelle((s) => evEsyasiAl(s, esyaId))}
-      onEvYukselt={() => durumGuncelle((s) => evYukselt(s))}
-      onUyuVeGunuBitir={() => durumGuncelle((s) => evdeUyuVeGunuBitir(s))}
+      onSokakGolgeBoksu={() =>
+        durumGuncelle((s) => sokakGolgeBoksu(s), 'golge_boksu')
+      }
+      onVardiya={(isId: string) =>
+        durumGuncelle((s) => vardiyaYap(s, isId), 'vardiya')
+      }
+      onYemek={(yemekId: string) =>
+        durumGuncelle((s) => yemekYe(s, yemekId), 'yemek')
+      }
+      onAcilCorba={() => durumGuncelle((s) => acilCorbaIc(s), 'acil_corba')}
+      onAileEtkiles={(uyeId) =>
+        durumGuncelle((s) => aileyleEtkiles(s, uyeId), 'aile')
+      }
+      onEvEsyasiAl={(esyaId: string) =>
+        durumGuncelle((s) => evEsyasiAl(s, esyaId), 'ev_esyasi')
+      }
+      onEvYukselt={() => durumGuncelle((s) => evYukselt(s), 'ev_yukselt')}
+      onUyuVeGunuBitir={() =>
+        durumGuncelle((s) => evdeUyuVeGunuBitir(s), 'uyku')
+      }
       onOlaySecenegi={(secenekId: string) =>
-        durumGuncelle((s) => olaySecenegiUygula(s, secenekId))
+        durumGuncelle((s) => olaySecenegiUygula(s, secenekId), 'olay')
       }
       onHocaDersiAl={(dersId: string) =>
-        durumGuncelle((s) => hocaDersiAl(s, dersId))
+        durumGuncelle((s) => hocaDersiAl(s, dersId), 'hoca_dersi')
       }
       onKomsuEtkiles={(komsuId: string) =>
-        durumGuncelle((s) => komsuEtkilesimiBaslat(s, komsuId))
+        durumGuncelle((s) => komsuEtkilesimiBaslat(s, komsuId), 'komsu')
       }
       onKomsuSecenegi={(secenekId: string) =>
-        durumGuncelle((s) => komsuSecenegiUygula(s, secenekId))
+        durumGuncelle((s) => komsuSecenegiUygula(s, secenekId), 'komsu')
       }
       onYetenekAc={(yetenekId: string) =>
-        durumGuncelle((s) => yetenekAc(s, yetenekId))
+        durumGuncelle((s) => yetenekAc(s, yetenekId), 'yetenek')
       }
-      onKomsuDayanisma={() => durumGuncelle((s) => komsuDayanismasiAl(s))}
+      onKomsuDayanisma={() =>
+        durumGuncelle((s) => komsuDayanismasiAl(s), 'komsu_dayanisma')
+      }
       onRingTavriDegistir={(tavir: RingTavri) =>
-        durumGuncelle((s) => ringTavriDegistir(s, tavir))
+        durumGuncelle((s) => ringTavriDegistir(s, tavir), 'ring_tavri')
       }
       onMacaBasla={handleMacaBasla}
       onSifirla={handleSifirla}
@@ -231,7 +312,14 @@ export default function App() {
   return (
     <>
       {aktifEkran}
-      <AudioDebugPanel />
+      <AudioDebugPanel
+        oyunDurumu={oyunDurumu}
+        onOyunDurumuAyarla={handleDebugDurumAyarla}
+        onAnindaGunBitir={handleDebugAnindaGunBitir}
+        onKiraGununeAtla={handleDebugKiraGununeAtla}
+        onZorlaMacBaslat={handleDebugZorlaMacBaslat}
+        onDengeDegisti={() => setDengeRevizyon((r) => r + 1)}
+      />
     </>
   );
 }

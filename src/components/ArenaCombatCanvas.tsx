@@ -17,6 +17,7 @@ import {
   pikselSpriteCiz,
   PikselSprite,
 } from '../game/pixelSprites';
+import { hitStopAktifMi } from '../game/effects';
 import { TEMA } from '../game/theme';
 
 const HAMLE_TURU_HARITASI = new Map(HAMLE_LISTESI.map((h) => [h.id, h.tur]));
@@ -174,6 +175,13 @@ export const ArenaCombatCanvas: React.FC<ArenaCombatCanvasProps> = ({
     let lastTime = performance.now();
     let elapsed = 0;
     let hazirCizim: (() => void) | null = null;
+    const baslangic = dovusRef.current;
+    const gorselBar = {
+      oyuncuCan: baslangic ? baslangic.oyuncu.can / Math.max(1, baslangic.oyuncu.maksCan) : 1,
+      oyuncuStam: baslangic ? baslangic.oyuncu.stamina / Math.max(1, baslangic.oyuncu.maksStamina) : 1,
+      rakipCan: baslangic ? baslangic.rakip.can / Math.max(1, baslangic.rakip.maksCan) : 1,
+      rakipStam: baslangic ? baslangic.rakip.stamina / Math.max(1, baslangic.rakip.maksStamina) : 1,
+    };
 
     const boyutGuncelle = () => {
       const rect = container.getBoundingClientRect();
@@ -332,47 +340,33 @@ export const ArenaCombatCanvas: React.FC<ArenaCombatCanvasProps> = ({
         const sagBarX = vw - barGen - 8;
 
         // Oyuncu (sol)
-        barCiz(solBarX, 13, barGen, 4, d.oyuncu.can / Math.max(1, d.oyuncu.maksCan), '#D63838');
+        barCiz(solBarX, 13, barGen, 4, gorselBar.oyuncuCan, '#D63838');
         barCiz(
           solBarX,
           19,
           barGen,
           2,
-          d.oyuncu.stamina / Math.max(1, d.oyuncu.maksStamina),
+          gorselBar.oyuncuStam,
           d.oyuncu.yavasladiMi ? '#E34A4A' : '#D99B38'
         );
 
         // Rakip (sağ)
-        barCiz(sagBarX, 13, barGen, 4, d.rakip.can / Math.max(1, d.rakip.maksCan), '#D63838');
+        barCiz(sagBarX, 13, barGen, 4, gorselBar.rakipCan, '#D63838');
         barCiz(
           sagBarX,
           19,
           barGen,
           2,
-          d.rakip.stamina / Math.max(1, d.rakip.maksStamina),
+          gorselBar.rakipStam,
           d.rakip.yavasladiMi ? '#E34A4A' : '#D99B38'
         );
 
-        // KO yavaşlatma karanlık vinyeti
-        if (d.durum === 'ko_yavaslatma') {
-          pCtx.fillStyle = 'rgba(11, 14, 23, 0.38)';
-          pCtx.fillRect(0, 0, vw, vh);
-        }
       }
 
-      // Ekran sarsıntısı + ana tuvale aktarım
+      // Ana tuvale aktarım (sarsıntı artık effects.ts üzerinden ölçekli uygulanır)
       ctx.imageSmoothingEnabled = false;
       ctx.clearRect(0, 0, displayW, displayH);
-
-      let shakeX = 0;
-      let shakeY = 0;
-      if (d && d.ekranSarsintiMs > 0 && d.sarsintiSiddeti > 0) {
-        const siddet = d.sarsintiSiddeti;
-        shakeX = Math.round((Math.random() - 0.5) * 2 * siddet);
-        shakeY = Math.round((Math.random() - 0.5) * 1.6 * siddet);
-      }
-
-      ctx.drawImage(pixelCanvas, shakeX, shakeY, displayW, displayH);
+      ctx.drawImage(pixelCanvas, 0, 0, displayW, displayH);
 
       // Keskin metin katmanı: isimler, süre, yüzen hasar sayıları, KO mührü
       if (d) {
@@ -426,6 +420,7 @@ export const ArenaCombatCanvas: React.FC<ArenaCombatCanvasProps> = ({
         ctx.textAlign = 'center';
         ctx.font = dmgFont;
         for (const s of d.yuzenSayilar) {
+          if (s.hasarDegeri !== undefined) continue;
           const gecenOran = 1 - s.kalanMs / Math.max(1, s.toplamMs);
           const hedefX =
             (s.hedef === 'oyuncu' ? displayW * 0.41 : displayW * 0.59) + s.ofsetX * olcekOran;
@@ -442,8 +437,22 @@ export const ArenaCombatCanvas: React.FC<ArenaCombatCanvasProps> = ({
         }
         ctx.globalAlpha = 1;
 
-        // KO yavaşlatma yazısı
+        // KO anında kırmızı vinyet + yavaşlatma yazısı
         if (d.durum === 'ko_yavaslatma') {
+          const vinyet = ctx.createRadialGradient(
+            displayW * 0.5,
+            displayH * 0.5,
+            displayH * 0.18,
+            displayW * 0.5,
+            displayH * 0.5,
+            Math.max(displayW, displayH) * 0.65
+          );
+          vinyet.addColorStop(0, 'rgba(214, 56, 56, 0)');
+          vinyet.addColorStop(0.62, 'rgba(214, 56, 56, 0.22)');
+          vinyet.addColorStop(1, 'rgba(165, 22, 22, 0.58)');
+          ctx.fillStyle = vinyet;
+          ctx.fillRect(0, 0, displayW, displayH);
+
           ctx.font = koFont;
           ctx.textAlign = 'center';
           ctx.fillStyle = '#06080E';
@@ -467,9 +476,21 @@ export const ArenaCombatCanvas: React.FC<ArenaCombatCanvasProps> = ({
       lastTime = now;
 
       const d = dovusRef.current;
-      const zamanCarpani = d?.durum === 'ko_yavaslatma' ? 0.25 : 1;
-      if (!d || d.hitstopKalanMs <= 0) {
+      const zamanCarpani = d?.durum === 'ko_yavaslatma' ? 0.3 : 1;
+      if (!hitStopAktifMi() && (!d || d.hitstopKalanMs <= 0)) {
         elapsed += dt * zamanCarpani;
+      }
+
+      if (d) {
+        const barAdim = Math.min(1, dt * 10);
+        const oCanHedef = d.oyuncu.can / Math.max(1, d.oyuncu.maksCan);
+        const oStamHedef = d.oyuncu.stamina / Math.max(1, d.oyuncu.maksStamina);
+        const rCanHedef = d.rakip.can / Math.max(1, d.rakip.maksCan);
+        const rStamHedef = d.rakip.stamina / Math.max(1, d.rakip.maksStamina);
+        gorselBar.oyuncuCan += (oCanHedef - gorselBar.oyuncuCan) * barAdim;
+        gorselBar.oyuncuStam += (oStamHedef - gorselBar.oyuncuStam) * barAdim;
+        gorselBar.rakipCan += (rCanHedef - gorselBar.rakipCan) * barAdim;
+        gorselBar.rakipStam += (rStamHedef - gorselBar.rakipStam) * barAdim;
       }
 
       sahneyiCiz();

@@ -7,17 +7,23 @@
  */
 
 import { KarakterGorunumu, MekanId } from '../game/theme';
+import {
+  DENGE,
+  dengeAboneOl,
+  DengeConfig,
+  STAT_YETENEK_ESIK_LISTESI,
+} from '../game/balance';
 
 // ----------------------------------------------------------------------------
-// 0. Zaman ve Ekonomi Sabitleri
+// 0. Zaman ve Ekonomi Sabitleri (DENGE ile senkron)
 // ----------------------------------------------------------------------------
 export const SAAT_SABITLERI = {
-  sabahBaslangicDakika: 8 * 60, // 08:00
-  geceGecEsikDakika: 22 * 60, // 22:00 sonrası ek yorgunluk/uyku kaybı
-  uyuyakalmaSiniriDakika: 26 * 60, // 02:00 (24:00 + 2 saat) sınırında baygın uyuma
-  uyuyakalmaSabahDakika: 10 * 60, // Geç uyuyunca ertesi gün 10:00'da kalkış
-  salonGunlukGirisUcreti: 20, // Arka sokak spor salonu günlük girişi
-} as const;
+  sabahBaslangicDakika: DENGE.zaman.sabahBaslangicDakika,
+  geceGecEsikDakika: DENGE.zaman.geceGecEsikDakika,
+  uyuyakalmaSiniriDakika: DENGE.zaman.uyuyakalmaSiniriDakika,
+  uyuyakalmaSabahDakika: DENGE.zaman.uyuyakalmaSabahDakika,
+  salonGunlukGirisUcreti: DENGE.antrenman.salonGunlukGirisUcreti,
+};
 
 // ----------------------------------------------------------------------------
 // 1. Mekan Tanımları (A Aşaması: Dünya ve Yolculuk)
@@ -37,40 +43,40 @@ export const MEKAN_TANIMLARI: MekanTanimi[] = [
     isim: 'Aile Evi',
     kisaAd: 'Ev',
     aciklama: 'Annen Emine ve kardeşin Elif ile yaşadığın yer. Yemek, uyku ve ev eşyaları burada.',
-    yolculukDakika: 15,
-    yolculukEnerji: 2,
+    yolculukDakika: DENGE.mekanlar.ev.yolculukDakika,
+    yolculukEnerji: DENGE.mekanlar.ev.yolculukEnerji,
   },
   {
     id: 'spor_salonu',
     isim: 'Arka Sokak Spor Salonu',
     kisaAd: 'Spor Salonu',
     aciklama: 'Paslı ağırlıklar, ağır kum torbaları ve ter kokan zemin. Tüm stat antrenmanları burada.',
-    yolculukDakika: 20,
-    yolculukEnerji: 3,
+    yolculukDakika: DENGE.mekanlar.spor_salonu.yolculukDakika,
+    yolculukEnerji: DENGE.mekanlar.spor_salonu.yolculukEnerji,
   },
   {
     id: 'market',
     isim: 'Mahalle Marketi',
     kisaAd: 'Market',
     aciklama: 'Soğuk dolapların vızıltısı altında hızlı atıştırmalık ya da ev için haftalık erzak al.',
-    yolculukDakika: 15,
-    yolculukEnerji: 2,
+    yolculukDakika: DENGE.mekanlar.market.yolculukDakika,
+    yolculukEnerji: DENGE.mekanlar.market.yolculukEnerji,
   },
   {
     id: 'is_yeri',
     isim: 'Toptancı Depo & Yükleme',
     kisaAd: 'İş Yeri',
     aciklama: 'Kasa taşıma, oto yıkama nöbeti ve ayak işleri. Kira ve geçim parası buradan çıkar.',
-    yolculukDakika: 25,
-    yolculukEnerji: 4,
+    yolculukDakika: DENGE.mekanlar.is_yeri.yolculukDakika,
+    yolculukEnerji: DENGE.mekanlar.is_yeri.yolculukEnerji,
   },
   {
     id: 'sokak_arena',
     isim: 'Gece Sokak Arenası',
     kisaAd: 'Sokak Arenası',
     aciklama: 'Lambanın altındaki tebeşir çizgili beton. Yeraltı sokak maçları ve gölge boksu burada döner.',
-    yolculukDakika: 20,
-    yolculukEnerji: 3,
+    yolculukDakika: DENGE.mekanlar.sokak_arena.yolculukDakika,
+    yolculukEnerji: DENGE.mekanlar.sokak_arena.yolculukEnerji,
   },
 ];
 
@@ -99,57 +105,57 @@ export const STAT_TANIMLARI: StatTanimi[] = [
     id: 'guc',
     isim: 'Güç',
     kisaKod: 'GÜÇ',
-    baslangicDegeri: 4,
+    baslangicDegeri: DENGE.statlar.guc.baslangicDegeri,
     aciklama: 'Ağır yumruk ve tekmelerin hasarını artırır, sert hamlelerin kilidini açar.',
     antrenmanAdi: 'Ağır Torba & Halter',
     antrenmanAciklamasi: 'Yıpranmış deri torbaya kroşe vur, demir plaka kaldır.',
-    sureDakika: 60,
-    enerjiMaliyeti: 26,
-    toklukMaliyeti: 14,
-    yorgunlukArtisi: 18,
-    temelIlerleme: 46,
+    sureDakika: DENGE.statlar.guc.sureDakika,
+    enerjiMaliyeti: DENGE.statlar.guc.enerjiMaliyeti,
+    toklukMaliyeti: DENGE.statlar.guc.toklukMaliyeti,
+    yorgunlukArtisi: DENGE.statlar.guc.yorgunlukArtisi,
+    temelIlerleme: DENGE.statlar.guc.temelIlerleme,
   },
   {
     id: 'ceviklik',
     isim: 'Çeviklik',
     kisaKod: 'ÇEV',
-    baslangicDegeri: 5,
+    baslangicDegeri: DENGE.statlar.ceviklik.baslangicDegeri,
     aciklama: 'Hızlı saldırıların isabetini, vuruş sıklığını ve kaçınma şansını belirler.',
     antrenmanAdi: 'Gölge Boksu & İp',
     antrenmanAciklamasi: 'Ayna karşısında ayak oyunu çalış, seri sol-sağ kombinasyonlar at.',
-    sureDakika: 55,
-    enerjiMaliyeti: 24,
-    toklukMaliyeti: 13,
-    yorgunlukArtisi: 16,
-    temelIlerleme: 46,
+    sureDakika: DENGE.statlar.ceviklik.sureDakika,
+    enerjiMaliyeti: DENGE.statlar.ceviklik.enerjiMaliyeti,
+    toklukMaliyeti: DENGE.statlar.ceviklik.toklukMaliyeti,
+    yorgunlukArtisi: DENGE.statlar.ceviklik.yorgunlukArtisi,
+    temelIlerleme: DENGE.statlar.ceviklik.temelIlerleme,
   },
   {
     id: 'refleks',
     isim: 'Refleks',
     kisaKod: 'REF',
-    baslangicDegeri: 4,
+    baslangicDegeri: DENGE.statlar.refleks.baslangicDegeri,
     aciklama: 'Rakibin hamlesini önceden okuyup eğilme ve blok başarısını artırır.',
     antrenmanAdi: 'Hız Topu & Eskiv',
     antrenmanAciklamasi: 'Tavana asılı refleks topunu okuyup son milisaniyede başını çek.',
-    sureDakika: 50,
-    enerjiMaliyeti: 22,
-    toklukMaliyeti: 11,
-    yorgunlukArtisi: 14,
-    temelIlerleme: 48,
+    sureDakika: DENGE.statlar.refleks.sureDakika,
+    enerjiMaliyeti: DENGE.statlar.refleks.enerjiMaliyeti,
+    toklukMaliyeti: DENGE.statlar.refleks.toklukMaliyeti,
+    yorgunlukArtisi: DENGE.statlar.refleks.yorgunlukArtisi,
+    temelIlerleme: DENGE.statlar.refleks.temelIlerleme,
   },
   {
     id: 'dayaniklilik',
     isim: 'Dayanıklılık',
     kisaKod: 'DAY',
-    baslangicDegeri: 5,
+    baslangicDegeri: DENGE.statlar.dayaniklilik.baslangicDegeri,
     aciklama: 'Maksimum can ve stamina sınırını yükseltir, toparlanmayı hızlandırır.',
     antrenmanAdi: 'Koşu Bandı & Çekirdek',
     antrenmanAciklamasi: 'Nefesin kesilene kadar tempo koşusu ve karın direnci çalış.',
-    sureDakika: 65,
-    enerjiMaliyeti: 28,
-    toklukMaliyeti: 16,
-    yorgunlukArtisi: 20,
-    temelIlerleme: 46,
+    sureDakika: DENGE.statlar.dayaniklilik.sureDakika,
+    enerjiMaliyeti: DENGE.statlar.dayaniklilik.enerjiMaliyeti,
+    toklukMaliyeti: DENGE.statlar.dayaniklilik.toklukMaliyeti,
+    yorgunlukArtisi: DENGE.statlar.dayaniklilik.yorgunlukArtisi,
+    temelIlerleme: DENGE.statlar.dayaniklilik.temelIlerleme,
   },
 ];
 
@@ -178,11 +184,7 @@ export const YEMEK_LISTESI: YemekTanimi[] = [
     mekan: 'ev',
     tur: 'hazir_ye',
     aciklama: 'Tencereden bir tabak sıcak yemek ısıt. Buzdolabından 1 öğün kullanır.',
-    fiyat: 0,
-    sureDakika: 20,
-    toklukArtisi: 40,
-    enerjiArtisi: 14,
-    moralEtkisi: 3,
+    ...DENGE.yemekler.ev_yemegi,
     stokTuketimi: 1,
   },
   {
@@ -191,11 +193,7 @@ export const YEMEK_LISTESI: YemekTanimi[] = [
     mekan: 'market',
     tur: 'hazir_ye',
     aciklama: 'Tezgah kenarında hızlıca açlığı bastıran ucuz sokak öğünü.',
-    fiyat: 35,
-    sureDakika: 15,
-    toklukArtisi: 32,
-    enerjiArtisi: 10,
-    moralEtkisi: 2,
+    ...DENGE.yemekler.market_simit,
   },
   {
     id: 'market_tavuk_pilav',
@@ -203,11 +201,7 @@ export const YEMEK_LISTESI: YemekTanimi[] = [
     mekan: 'market',
     tur: 'hazir_ye',
     aciklama: 'Spor sonrası kasları toparlayan doyurucu tabak.',
-    fiyat: 75,
-    sureDakika: 20,
-    toklukArtisi: 62,
-    enerjiArtisi: 22,
-    moralEtkisi: 6,
+    ...DENGE.yemekler.market_tavuk_pilav,
   },
   {
     id: 'market_mutfak_poseti',
@@ -215,11 +209,7 @@ export const YEMEK_LISTESI: YemekTanimi[] = [
     mekan: 'market',
     tur: 'erzak_stok',
     aciklama: 'Evdeki buzdolabına 3 öğünlük erzak ekler. Dışarıdan yemeye göre hesaplıdır.',
-    fiyat: 95,
-    sureDakika: 10,
-    toklukArtisi: 0,
-    enerjiArtisi: 0,
-    moralEtkisi: 2,
+    ...DENGE.yemekler.market_mutfak_poseti,
     stokKazanci: 3,
   },
   {
@@ -228,11 +218,7 @@ export const YEMEK_LISTESI: YemekTanimi[] = [
     mekan: 'market',
     tur: 'erzak_stok',
     aciklama: 'Buzdolabını bir hafta idare edecek kadar doldurur. En ekonomik seçim.',
-    fiyat: 175,
-    sureDakika: 10,
-    toklukArtisi: 0,
-    enerjiArtisi: 0,
-    moralEtkisi: 5,
+    ...DENGE.yemekler.market_haftalik_erzak,
     stokKazanci: 6,
   },
 ];
@@ -253,40 +239,27 @@ export const EV_ESYALARI_LISTESI: EvEsyasiTanimi[] = [
   {
     id: 'yatak_ortopedik',
     isim: 'İkinci El Ortopedik Yatak',
-    fiyat: 280,
     aciklama: 'Yayları batan somyanın yerini alır. Gece uyku ve enerji toparlanmasını +12 artırır.',
-    gunlukEnerjiBonus: 12,
-    gunlukUykuBonus: 12,
-    gunlukMoralBonus: 1,
+    ...DENGE.evEsyalari.yatak_ortopedik,
   },
   {
     id: 'elektrikli_isitici',
     isim: 'Elektrikli Isıtıcı',
-    fiyat: 220,
     aciklama: 'Soğuk geceyi kırar. Uyku toparlanmasını +8 ve günlük morali +4 yükseltir.',
-    gunlukEnerjiBonus: 4,
-    gunlukUykuBonus: 8,
-    gunlukMoralBonus: 4,
+    ...DENGE.evEsyalari.elektrikli_isitici,
   },
   {
     id: 'kum_torbasi',
     isim: 'Ev Tipi Kum Torbası',
-    fiyat: 340,
     aciklama: 'Salona asılan eski kum torbası. Spor salonuna gitmeden evde Güç ve Çeviklik çalışmanı açar.',
-    gunlukEnerjiBonus: 0,
-    gunlukUykuBonus: 0,
-    gunlukMoralBonus: 2,
+    ...DENGE.evEsyalari.kum_torbasi,
     evdeAntrenmanAcar: true,
   },
   {
     id: 'agirlik_seti',
     isim: 'Döküm Ağırlık Seti',
-    fiyat: 420,
     aciklama: 'Kendi evinde demir kaldırmanı sağlar. Tüm Güç ve Dayanıklılık antrenmanlarını +%20 hızlandırır.',
-    gunlukEnerjiBonus: 0,
-    gunlukUykuBonus: 0,
-    gunlukMoralBonus: 2,
-    gucDayaniklilikBonusYuzde: 20,
+    ...DENGE.evEsyalari.agirlik_seti,
   },
 ];
 
@@ -296,14 +269,14 @@ export const EV_ESYALARI_LISTESI: EvEsyasiTanimi[] = [
 export const KARAKTER_SABITLERI = {
   gercekAd: 'Kerem',
   varsayilanLakap: 'Gölge',
-  yas: 20,
-  baslangicPara: 350,
-  baslangicEnerji: 100,
-  maksEnerji: 100,
-  baslangicTokluk: 82,
-  baslangicMoral: 58,
-  baslangicYorgunluk: 10,
-  baslangicBuzdolabi: 2,
+  yas: DENGE.baslangic.yas,
+  baslangicPara: DENGE.baslangic.para,
+  baslangicEnerji: DENGE.baslangic.enerji,
+  maksEnerji: DENGE.baslangic.maksEnerji,
+  baslangicTokluk: DENGE.baslangic.tokluk,
+  baslangicMoral: DENGE.baslangic.moral,
+  baslangicYorgunluk: DENGE.baslangic.yorgunluk,
+  baslangicBuzdolabi: DENGE.baslangic.buzdolabiStok,
   girisHikayesi: [
     '20 yaşındasın, adın Kerem. Babanı kaybettikten sonra üniversiteyi yarıda bırakıp bu mahallenin soğuk sokaklarına döndün.',
     'Evde annen Emine ve küçük kız kardeşin Elif var; haftalık kira da evin geçimi de artık senin omuzlarında. Gündüz işte ter dök, akşam salonda çalış, zamanı ve karnını iyi yönet.',
@@ -318,7 +291,7 @@ export const KARAKTER_SABITLERI = {
     'Akrep',
     'Gece',
   ],
-} as const;
+};
 
 export interface AileUyesi {
   id: string;
@@ -381,10 +354,7 @@ export const HAMLE_LISTESI: HamleVerisi[] = [
     id: 'duz_yumruk',
     isim: 'Düz Yumruk',
     tur: 'yumruk',
-    temelHasar: 10,
-    staminaMaliyeti: 10,
-    isabetSansi: 84,
-    beklemeSuresiMs: 850,
+    ...DENGE.dovus.hamleler.duz_yumruk,
     kisayolTusu: '1',
     statEtkileri: { ceviklik: 1.2, guc: 0.6 },
     acilisSarti: {},
@@ -395,10 +365,7 @@ export const HAMLE_LISTESI: HamleVerisi[] = [
     id: 'sert_yumruk',
     isim: 'Sert Yumruk',
     tur: 'yumruk',
-    temelHasar: 22,
-    staminaMaliyeti: 22,
-    isabetSansi: 68,
-    beklemeSuresiMs: 1850,
+    ...DENGE.dovus.hamleler.sert_yumruk,
     kisayolTusu: '2',
     statEtkileri: { guc: 1.6, ceviklik: 0.3 },
     acilisSarti: { guc: 7 },
@@ -409,10 +376,7 @@ export const HAMLE_LISTESI: HamleVerisi[] = [
     id: 'alcak_tekme',
     isim: 'Alçak Tekme',
     tur: 'tekme',
-    temelHasar: 13,
-    staminaMaliyeti: 14,
-    isabetSansi: 80,
-    beklemeSuresiMs: 1150,
+    ...DENGE.dovus.hamleler.alcak_tekme,
     kisayolTusu: '3',
     statEtkileri: { ceviklik: 1.1, guc: 0.7 },
     acilisSarti: {},
@@ -423,10 +387,7 @@ export const HAMLE_LISTESI: HamleVerisi[] = [
     id: 'yan_tekme',
     isim: 'Yan Tekme',
     tur: 'tekme',
-    temelHasar: 26,
-    staminaMaliyeti: 28,
-    isabetSansi: 65,
-    beklemeSuresiMs: 2200,
+    ...DENGE.dovus.hamleler.yan_tekme,
     kisayolTusu: '4',
     statEtkileri: { guc: 1.5, ceviklik: 0.5 },
     acilisSarti: { guc: 8, ceviklik: 6 },
@@ -437,53 +398,38 @@ export const HAMLE_LISTESI: HamleVerisi[] = [
     id: 'blok',
     isim: 'Blok',
     tur: 'kacinma',
-    temelHasar: 0,
-    staminaMaliyeti: 0,
-    isabetSansi: 92,
-    beklemeSuresiMs: 1100,
+    ...DENGE.dovus.hamleler.blok,
     kisayolTusu: '5',
     statEtkileri: { refleks: 1.0, dayaniklilik: 0.9 },
     acilisSarti: {},
     aciklama: 'Gardını sıkılaştırıp gelen hasarı azaltır ve nefeslenip stamina toparlatır.',
-    staminaToparlanma: 16,
   },
   {
     id: 'geri_cekil',
     isim: 'Geri Çekil',
     tur: 'kacinma',
-    temelHasar: 0,
-    staminaMaliyeti: 8,
-    isabetSansi: 74,
-    beklemeSuresiMs: 1400,
+    ...DENGE.dovus.hamleler.geri_cekil,
     kisayolTusu: '6',
     statEtkileri: { ceviklik: 1.3, refleks: 0.6 },
     acilisSarti: {},
     aciklama: 'Adım geri atıp saldırıdan sıyrıl. Başarılı olursa karşı saldırı fırsatı doğar.',
-    karsiSaldiriFirsati: 20,
   },
   {
     id: 'egil_yana_kay',
     isim: 'Eğil / Yana Kay',
     tur: 'kacinma',
-    temelHasar: 0,
-    staminaMaliyeti: 10,
-    isabetSansi: 78,
-    beklemeSuresiMs: 1750,
+    ...DENGE.dovus.hamleler.egil_yana_kay,
     kisayolTusu: '7',
     statEtkileri: { refleks: 1.5, ceviklik: 0.5 },
     acilisSarti: { refleks: 6 },
     aciklama: 'Rakibin omzunu okuyup altından kayma. Yüksek karşı saldırı açığı yaratır.',
-    karsiSaldiriFirsati: 35,
   },
   // --- C1 Yetenek Ağacından Açılan Hamleler ---
   {
     id: 'sol_krose',
     isim: 'Sol Kroşe',
     tur: 'yumruk',
-    temelHasar: 16,
-    staminaMaliyeti: 14,
-    isabetSansi: 82,
-    beklemeSuresiMs: 1300,
+    ...DENGE.dovus.hamleler.sol_krose,
     kisayolTusu: '8',
     statEtkileri: { guc: 1.2, ceviklik: 0.8 },
     acilisSarti: {},
@@ -495,10 +441,7 @@ export const HAMLE_LISTESI: HamleVerisi[] = [
     id: 'cene_aparkati',
     isim: 'Çene Aparkatı',
     tur: 'yumruk',
-    temelHasar: 26,
-    staminaMaliyeti: 24,
-    isabetSansi: 74,
-    beklemeSuresiMs: 2100,
+    ...DENGE.dovus.hamleler.cene_aparkati,
     kisayolTusu: '9',
     statEtkileri: { guc: 1.7, ceviklik: 0.4 },
     acilisSarti: {},
@@ -510,10 +453,7 @@ export const HAMLE_LISTESI: HamleVerisi[] = [
     id: 'diz_darbesi',
     isim: 'Diz Darbesi',
     tur: 'tekme',
-    temelHasar: 18,
-    staminaMaliyeti: 16,
-    isabetSansi: 83,
-    beklemeSuresiMs: 1400,
+    ...DENGE.dovus.hamleler.diz_darbesi,
     kisayolTusu: '0',
     statEtkileri: { ceviklik: 1.1, guc: 0.9 },
     acilisSarti: {},
@@ -525,10 +465,7 @@ export const HAMLE_LISTESI: HamleVerisi[] = [
     id: 'doner_tekme',
     isim: 'Döner Tekme',
     tur: 'tekme',
-    temelHasar: 30,
-    staminaMaliyeti: 28,
-    isabetSansi: 70,
-    beklemeSuresiMs: 2400,
+    ...DENGE.dovus.hamleler.doner_tekme,
     kisayolTusu: 'Q',
     statEtkileri: { ceviklik: 1.3, guc: 1.0 },
     acilisSarti: {},
@@ -540,41 +477,30 @@ export const HAMLE_LISTESI: HamleVerisi[] = [
     id: 'celik_gard',
     isim: 'Çelik Gard',
     tur: 'kacinma',
-    temelHasar: 0,
-    staminaMaliyeti: 0,
-    isabetSansi: 96,
-    beklemeSuresiMs: 1700,
+    ...DENGE.dovus.hamleler.celik_gard,
     kisayolTusu: 'W',
     statEtkileri: { refleks: 1.1, dayaniklilik: 1.2 },
     acilisSarti: {},
     yetenekId: 's_celik_gard',
     aciklama: 'Gelişmiş savunma duruşu: darbeyi sertçe emer ve +24 stamina kazandırır.',
-    staminaToparlanma: 24,
   },
   {
     id: 'hayalet_adim',
     isim: 'Hayalet Adım',
     tur: 'kacinma',
-    temelHasar: 0,
-    staminaMaliyeti: 10,
-    isabetSansi: 86,
-    beklemeSuresiMs: 1650,
+    ...DENGE.dovus.hamleler.hayalet_adim,
     kisayolTusu: 'E',
     statEtkileri: { refleks: 1.6, ceviklik: 0.8 },
     acilisSarti: {},
     yetenekId: 's_hayalet_eskiv',
     aciklama: 'Ani yan sıyrılma ile rakibi boşa düşürür ve çok geniş karşı saldırı açığı yaratır.',
-    karsiSaldiriFirsati: 45,
   },
   // --- C2 Antrenörlerden Öğrenilen Özel Hamleler ---
   {
     id: 'vucut_krosesi',
     isim: 'Vücut Kroşesi',
     tur: 'yumruk',
-    temelHasar: 19,
-    staminaMaliyeti: 15,
-    isabetSansi: 84,
-    beklemeSuresiMs: 1450,
+    ...DENGE.dovus.hamleler.vucut_krosesi,
     kisayolTusu: 'R',
     statEtkileri: { guc: 1.4, ceviklik: 0.6 },
     acilisSarti: {},
@@ -586,10 +512,7 @@ export const HAMLE_LISTESI: HamleVerisi[] = [
     id: 'capraz_kontra',
     isim: 'Çapraz Kontra',
     tur: 'yumruk',
-    temelHasar: 17,
-    staminaMaliyeti: 11,
-    isabetSansi: 90,
-    beklemeSuresiMs: 1200,
+    ...DENGE.dovus.hamleler.capraz_kontra,
     kisayolTusu: 'T',
     statEtkileri: { refleks: 1.3, ceviklik: 1.1 },
     acilisSarti: {},
@@ -620,36 +543,21 @@ export const EV_SEVIYELERI: EvSeviyesi[] = [
     seviye: 0,
     id: 'rutubetli_bodrum',
     isim: 'Rutubetli Bodrum Katı',
-    haftalikKira: 900,
-    gunlukEnerjiToparlanma: 72,
-    yorgunlukAzaltma: 32,
-    moralEtkisi: -2,
-    esyaKapasitesi: 4,
-    yukseltmeMaliyeti: 0,
+    ...DENGE.evler.rutubetli_bodrum,
     aciklama: 'Duvarları nem kokan, yayları çökmüş eski yataklı zemin altı daire. Sokak gürültüsü hiç dinmez.',
   },
   {
     seviye: 1,
     id: 'sobali_daire',
     isim: 'Sobalı Arka Sokak Dairesi',
-    haftalikKira: 1650,
-    gunlukEnerjiToparlanma: 88,
-    yorgunlukAzaltma: 48,
-    moralEtkisi: 2,
-    esyaKapasitesi: 4,
-    yukseltmeMaliyeti: 1200,
+    ...DENGE.evler.sobali_daire,
     aciklama: 'İki göz, güneş almasa da kuru ve kapısı kilitlenen mütevazı bir daire. Emine ve Elif burada daha rahat uyur.',
   },
   {
     seviye: 2,
     id: 'aydinlik_ara_kat',
     isim: 'Aydınlık Ara Kat Daire',
-    haftalikKira: 2800,
-    gunlukEnerjiToparlanma: 100,
-    yorgunlukAzaltma: 65,
-    moralEtkisi: 6,
-    esyaKapasitesi: 6,
-    yukseltmeMaliyeti: 2500,
+    ...DENGE.evler.aydinlik_ara_kat,
     aciklama: 'Kaloriferli, sessiz ve temiz bir mahalle dairesi. İyi dinlenmek ve antrenman yapmak için gerçek bir sığınak.',
   },
 ];
@@ -680,63 +588,31 @@ export const EK_IS_TANIMLARI: EkIsTanimi[] = [
     id: 'el_ilani',
     isim: 'El İlanı & Kurye Desteği',
     aciklama: 'Düşük enerjiyle bile yapılabilen kısa süreli ayak işi. Zor durumda kurtarıcıdır.',
-    sureDakika: 90,
-    enerjiMaliyeti: 15,
-    toklukMaliyeti: 10,
-    yorgunlukArtisi: 10,
-    paraOdulu: 95,
-    moralEtkisi: 0,
+    ...DENGE.isYerleri.el_ilani,
   },
   {
     id: 'gece_oto_yikama',
     isim: 'Oto Yıkama Vardiyası',
     aciklama: 'Sanayi köşesindeki istasyonda vardiya. Soğuk su elini yakar ama düzenlidir.',
-    sureDakika: 150,
-    enerjiMaliyeti: 25,
-    toklukMaliyeti: 16,
-    yorgunlukArtisi: 16,
-    paraOdulu: 195,
-    moralEtkisi: 0,
+    ...DENGE.isYerleri.gece_oto_yikama,
   },
   {
     id: 'hal_hamalligi',
     isim: 'Depo Yükleme & Kasa Taşıma',
     aciklama: 'Ağır kasaları kamyona yükle. Sırtını zorlar ama kira için en yüksek ücreti bırakır.',
-    sureDakika: 180,
-    enerjiMaliyeti: 34,
-    toklukMaliyeti: 22,
-    yorgunlukArtisi: 22,
-    paraOdulu: 265,
-    moralEtkisi: -2,
-    saygiEtkisi: 1,
+    ...DENGE.isYerleri.hal_hamalligi,
   },
   {
     id: 'guvenilir_esnaf_teslimat',
     isim: 'Esnaf Emanet & Kasa Teslimatı',
     aciklama: 'Yüksek Saygı ile açılan güvenilir iş. Mahalle esnafı değerli paket ve nakdi sana emanet eder.',
-    sureDakika: 120,
-    enerjiMaliyeti: 18,
-    toklukMaliyeti: 12,
-    yorgunlukArtisi: 12,
-    paraOdulu: 255,
-    moralEtkisi: 3,
-    gerekliSaygi: 22,
-    saygiEtkisi: 2,
+    ...DENGE.isYerleri.guvenilir_esnaf_teslimat,
   },
   {
     id: 'haracci_tahsilat_isi',
     isim: 'Çete İşi: Gece Tahsilatı',
     aciklama: 'Yüksek Korku ile açılan kirli ama yüksek ödemeli gece tahsilatı.',
-    sureDakika: 90,
-    enerjiMaliyeti: 16,
-    toklukMaliyeti: 8,
-    yorgunlukArtisi: 10,
-    paraOdulu: 450,
-    moralEtkisi: -5,
-    gerekliKorku: 22,
-    saygiEtkisi: -4,
-    korkuEtkisi: 3,
-    riskOrani: 0.35,
+    ...DENGE.isYerleri.haracci_tahsilat_isi,
     riskNotu: '%35 Arbede (-14 EN · -12 Uyku)',
   },
 ];
@@ -1002,13 +878,13 @@ export interface RakipTanimi {
 }
 
 export const DOVUS_SABITLERI = {
-  macSureDakika: 45,
-  macEnerjiMaliyeti: 20,
-  macToklukMaliyeti: 10,
-  macUykuKaybi: 14,
-  maksMacSuresiMs: 90_000, // 90 saniyelik gerçek zamanlı sokak raundu
-  koYavaslatmaMs: 1450,
-} as const;
+  macSureDakika: DENGE.dovus.macSureDakika,
+  macEnerjiMaliyeti: DENGE.dovus.macEnerjiMaliyeti,
+  macToklukMaliyeti: DENGE.dovus.macToklukMaliyeti,
+  macUykuKaybi: DENGE.dovus.macUykuKaybi,
+  maksMacSuresiMs: DENGE.dovus.maksMacSuresiMs,
+  koYavaslatmaMs: DENGE.dovus.koYavaslatmaMs,
+};
 
 export const RAKIP_LISTESI: RakipTanimi[] = [
   {
@@ -1018,14 +894,8 @@ export const RAKIP_LISTESI: RakipTanimi[] = [
     tarz: 'saldirgan',
     seviyeEtiketi: 'Çaylak · Sokak Köşesi',
     aciklama: 'Ağır cüsseli ve kaba kuvvetle yüklenen bir bıçkın. Gardını açık bırakır, kaçınınca kolay av olur.',
-    statlar: { guc: 5, ceviklik: 3, refleks: 3, dayaniklilik: 6 },
-    paraOdulu: 165,
-    itibarOdulu: 2,
-    teselliPara: 25,
-    cekinmeEsik1: 12,
-    cekinmeYuzde1: 12,
-    cekinmeEsik2: 22,
-    cekinmeYuzde2: 20,
+    ...DENGE.dovus.rakipler.sisko_cetin,
+    statlar: { ...DENGE.dovus.rakipler.sisko_cetin.statlar },
     gorunum: {
       tenRengi: '#C49074',
       golgeTenRengi: '#8E5E46',
@@ -1045,14 +915,8 @@ export const RAKIP_LISTESI: RakipTanimi[] = [
     tarz: 'cevik',
     seviyeEtiketi: 'Orta · Arka Avlu',
     aciklama: 'Hızlı ayak oyunu ve alçak tekmelerle sürekli mesafe bozar. Çevikliği yüksektir.',
-    statlar: { guc: 5, ceviklik: 7, refleks: 6, dayaniklilik: 5 },
-    paraOdulu: 285,
-    itibarOdulu: 3,
-    teselliPara: 35,
-    cekinmeEsik1: 20,
-    cekinmeYuzde1: 10,
-    cekinmeEsik2: 32,
-    cekinmeYuzde2: 16,
+    ...DENGE.dovus.rakipler.jilet_emir,
+    statlar: { ...DENGE.dovus.rakipler.jilet_emir.statlar },
     gorunum: {
       tenRengi: '#D4A88E',
       golgeTenRengi: '#9B7058',
@@ -1072,14 +936,8 @@ export const RAKIP_LISTESI: RakipTanimi[] = [
     tarz: 'savunmaci',
     seviyeEtiketi: 'Zorlu · Depo Önü',
     aciklama: 'Gardını kolay kolay indirmez, rakibin staminasını tüketip sert yan tekme ile bitirir.',
-    statlar: { guc: 7, ceviklik: 5, refleks: 7, dayaniklilik: 8 },
-    paraOdulu: 430,
-    itibarOdulu: 5,
-    teselliPara: 45,
-    cekinmeEsik1: 30,
-    cekinmeYuzde1: 8,
-    cekinmeEsik2: 45,
-    cekinmeYuzde2: 14,
+    ...DENGE.dovus.rakipler.demir_serkan,
+    statlar: { ...DENGE.dovus.rakipler.demir_serkan.statlar },
     gorunum: {
       tenRengi: '#B9876E',
       golgeTenRengi: '#825742',
@@ -1099,14 +957,8 @@ export const RAKIP_LISTESI: RakipTanimi[] = [
     tarz: 'saldirgan',
     seviyeEtiketi: 'Usta · Gece Şampiyonu',
     aciklama: 'Mahallenin en korkulan sokak dövüşçüsü. Ağır kroşeleri bloklanmazsa birkaç saniyede yıkar.',
-    statlar: { guc: 9, ceviklik: 6, refleks: 6, dayaniklilik: 9 },
-    paraOdulu: 640,
-    itibarOdulu: 8,
-    teselliPara: 60,
-    cekinmeEsik1: 45,
-    cekinmeYuzde1: 6,
-    cekinmeEsik2: 65,
-    cekinmeYuzde2: 12,
+    ...DENGE.dovus.rakipler.kasap_halil,
+    statlar: { ...DENGE.dovus.rakipler.kasap_halil.statlar },
     gorunum: {
       tenRengi: '#C18C72',
       golgeTenRengi: '#855540',
@@ -1125,7 +977,7 @@ export const RAKIP_LISTESI: RakipTanimi[] = [
 // 10. C1 Aşaması: Yetenek Ağacı (4 Dal × 5 Kademe = 20 Düğüm)
 // Yeni yetenek eklemek için aşağıdaki listeye yeni bir kayıt eklemek yeterlidir.
 // ----------------------------------------------------------------------------
-export const STAT_YETENEK_ESIKLERI = [6, 8, 10, 12] as const;
+export const STAT_YETENEK_ESIKLERI = STAT_YETENEK_ESIK_LISTESI;
 
 export type YetenekDaliId = 'yumruk' | 'tekme' | 'savunma' | 'dayaniklilik';
 
@@ -1519,9 +1371,7 @@ export const ANTRENOR_DERSLERI: AntrenorDersi[] = [
     isim: 'Kömürlük Kroşesi Dersi',
     aciklama: 'Müslüm Hoca kaburga altına giren kısa vücut kroşesini torba başında birebir gösterir.',
     ozetEtiket: 'Hamle: Vücut Kroşesi [R] + +%10 Yumruk',
-    paraMaliyeti: 130,
-    sureDakika: 60,
-    enerjiMaliyeti: 16,
+    ...DENGE.hocaDersleri.muslum_vucut_krosesi,
     statSarti: { guc: 5 },
     etki: { acilanHamleId: 'vucut_krosesi', yumrukHasarYuzde: 10 },
   },
@@ -1531,9 +1381,7 @@ export const ANTRENOR_DERSLERI: AntrenorDersi[] = [
     isim: 'Çivi Gibi Durmak',
     aciklama: 'Ağır darbe alırken çeneni saklayıp gövdeni kilitleme dersi. Kalıcı can ve blok direnci kazandırır.',
     ozetEtiket: 'Pasif: +14 Maks Can · +%6 Blok',
-    paraMaliyeti: 180,
-    sureDakika: 75,
-    enerjiMaliyeti: 18,
+    ...DENGE.hocaDersleri.muslum_civi_durus,
     statSarti: { dayaniklilik: 6 },
     etki: { ekMaksCan: 14, blokKesintiYuzde: 6 },
   },
@@ -1543,9 +1391,7 @@ export const ANTRENOR_DERSLERI: AntrenorDersi[] = [
     isim: 'Ağır Torba Disiplini',
     aciklama: 'Antrenman temposunu düzene sokan özel program. Verimi kalıcı artırır ve bir ustalık puanı verir.',
     ozetEtiket: 'Pasif: +%10 Verim · +1 YP',
-    paraMaliyeti: 250,
-    sureDakika: 90,
-    enerjiMaliyeti: 22,
+    ...DENGE.hocaDersleri.muslum_agir_disiplin,
     statSarti: { guc: 8, dayaniklilik: 7 },
     oncekiDersId: 'muslum_vucut_krosesi',
     etki: { antrenmanVerimBonusu: 10, ekYetenekPuani: 1 },
@@ -1556,9 +1402,7 @@ export const ANTRENOR_DERSLERI: AntrenorDersi[] = [
     isim: 'İp Üstü Ritim & Nefes',
     aciklama: 'Üç dakikalık aralıksız tempo ile nefesini düzenlersin. Dövüşte stamina yenilemesi ve isabet artar.',
     ozetEtiket: 'Pasif: +%10 Stamina Yenileme · +%5 İsabet',
-    paraMaliyeti: 120,
-    sureDakika: 55,
-    enerjiMaliyeti: 15,
+    ...DENGE.hocaDersleri.cigdem_ritim_ipi,
     statSarti: { ceviklik: 5 },
     etki: { staminaToparlanmaYuzde: 10, isabetBonusu: 5 },
   },
@@ -1568,9 +1412,7 @@ export const ANTRENOR_DERSLERI: AntrenorDersi[] = [
     isim: 'Ters Kontra Eskivi',
     aciklama: 'Çiğdem Hoca refleks topu önünde hızlı Çapraz Kontra açılışını ve yan sıyrılmayı öğretir.',
     ozetEtiket: 'Hamle: Çapraz Kontra [T] + +%6 Kaçınma',
-    paraMaliyeti: 195,
-    sureDakika: 75,
-    enerjiMaliyeti: 18,
+    ...DENGE.hocaDersleri.cigdem_capraz_kontra,
     statSarti: { refleks: 6, ceviklik: 6 },
     etki: { acilanHamleId: 'capraz_kontra', kacinmaSansiBonusu: 6 },
   },
@@ -1580,9 +1422,7 @@ export const ANTRENOR_DERSLERI: AntrenorDersi[] = [
     isim: 'Fırtına Tekmesi Tekniği',
     aciklama: 'Kalça dönüşünü hızlandırarak tekmelerini ve karşı saldırı gücünü keskinleştirir.',
     ozetEtiket: 'Pasif: +%15 Tekme · +0.15 Kontra',
-    paraMaliyeti: 260,
-    sureDakika: 90,
-    enerjiMaliyeti: 20,
+    ...DENGE.hocaDersleri.cigdem_firtina_tekmesi,
     statSarti: { ceviklik: 8 },
     oncekiDersId: 'cigdem_ritim_ipi',
     etki: { tekmeHasarYuzde: 15, karsiSaldiriCarpanBonusu: 0.15 },
@@ -2252,12 +2092,12 @@ export interface ItibarEsigiTanimi {
 }
 
 export const ITIBAR_SABITLERI = {
-  saygiEsik1: 12,
-  saygiEsik2: 22,
-  korkuEsik1: 12,
-  korkuEsik2: 22,
-  maksItibar: 100,
-} as const;
+  saygiEsik1: DENGE.verimVeEsikler.saygiEsik1,
+  saygiEsik2: DENGE.verimVeEsikler.saygiEsik2,
+  korkuEsik1: DENGE.verimVeEsikler.korkuEsik1,
+  korkuEsik2: DENGE.verimVeEsikler.korkuEsik2,
+  maksItibar: DENGE.verimVeEsikler.maksItibar,
+};
 
 export const ITIBAR_ESIKLERI: ItibarEsigiTanimi[] = [
   {
@@ -2527,9 +2367,84 @@ export const AHLAKI_GRI_OLAYLAR: EvOlayi[] = [
 ];
 
 // ----------------------------------------------------------------------------
-// 14. Gelecek Aşamalar İçin Yer Tutucu Veri Listeleri (D Aşaması)
+// 14. Gelecek Aşamalar İçin Yer Tutucu Veri Listeleri & Canlı Denge Senkronizasyonu
 // ----------------------------------------------------------------------------
 export const GELECEK_ASAMA_YER_TUTUCULARI = {
-  // D Aşamasında eklenecek ses/mekan/rakip cilaları
   dCilaOgeleri: [] as Array<{ id: string; isim: string }>,
 };
+
+function verileriDengeyleSenkronizeEt(denge: DengeConfig): void {
+  SAAT_SABITLERI.sabahBaslangicDakika = denge.zaman.sabahBaslangicDakika;
+  SAAT_SABITLERI.geceGecEsikDakika = denge.zaman.geceGecEsikDakika;
+  SAAT_SABITLERI.uyuyakalmaSiniriDakika = denge.zaman.uyuyakalmaSiniriDakika;
+  SAAT_SABITLERI.uyuyakalmaSabahDakika = denge.zaman.uyuyakalmaSabahDakika;
+  SAAT_SABITLERI.salonGunlukGirisUcreti = denge.antrenman.salonGunlukGirisUcreti;
+
+  KARAKTER_SABITLERI.yas = denge.baslangic.yas;
+  KARAKTER_SABITLERI.baslangicPara = denge.baslangic.para;
+  KARAKTER_SABITLERI.baslangicEnerji = denge.baslangic.enerji;
+  KARAKTER_SABITLERI.maksEnerji = denge.baslangic.maksEnerji;
+  KARAKTER_SABITLERI.baslangicTokluk = denge.baslangic.tokluk;
+  KARAKTER_SABITLERI.baslangicMoral = denge.baslangic.moral;
+  KARAKTER_SABITLERI.baslangicYorgunluk = denge.baslangic.yorgunluk;
+  KARAKTER_SABITLERI.baslangicBuzdolabi = denge.baslangic.buzdolabiStok;
+
+  DOVUS_SABITLERI.macSureDakika = denge.dovus.macSureDakika;
+  DOVUS_SABITLERI.macEnerjiMaliyeti = denge.dovus.macEnerjiMaliyeti;
+  DOVUS_SABITLERI.macToklukMaliyeti = denge.dovus.macToklukMaliyeti;
+  DOVUS_SABITLERI.macUykuKaybi = denge.dovus.macUykuKaybi;
+  DOVUS_SABITLERI.maksMacSuresiMs = denge.dovus.maksMacSuresiMs;
+  DOVUS_SABITLERI.koYavaslatmaMs = denge.dovus.koYavaslatmaMs;
+
+  ITIBAR_SABITLERI.saygiEsik1 = denge.verimVeEsikler.saygiEsik1;
+  ITIBAR_SABITLERI.saygiEsik2 = denge.verimVeEsikler.saygiEsik2;
+  ITIBAR_SABITLERI.korkuEsik1 = denge.verimVeEsikler.korkuEsik1;
+  ITIBAR_SABITLERI.korkuEsik2 = denge.verimVeEsikler.korkuEsik2;
+  ITIBAR_SABITLERI.maksItibar = denge.verimVeEsikler.maksItibar;
+
+  for (const m of MEKAN_TANIMLARI) {
+    Object.assign(m, denge.mekanlar[m.id]);
+  }
+  for (const s of STAT_TANIMLARI) {
+    Object.assign(s, denge.statlar[s.id]);
+  }
+  for (const y of YEMEK_LISTESI) {
+    const kaynak = denge.yemekler[y.id as keyof typeof denge.yemekler];
+    if (kaynak) Object.assign(y, kaynak);
+  }
+  for (const e of EV_ESYALARI_LISTESI) {
+    const kaynak = denge.evEsyalari[e.id as keyof typeof denge.evEsyalari];
+    if (kaynak) Object.assign(e, kaynak);
+  }
+  for (const ev of EV_SEVIYELERI) {
+    const kaynak = denge.evler[ev.id as keyof typeof denge.evler];
+    if (kaynak) Object.assign(ev, kaynak);
+  }
+  for (const is of EK_IS_TANIMLARI) {
+    const kaynak = denge.isYerleri[is.id as keyof typeof denge.isYerleri];
+    if (kaynak) Object.assign(is, kaynak);
+  }
+  for (const h of HAMLE_LISTESI) {
+    const kaynak = denge.dovus.hamleler[h.id];
+    if (kaynak) Object.assign(h, kaynak);
+  }
+  for (const r of RAKIP_LISTESI) {
+    const kaynak = denge.dovus.rakipler[r.id];
+    if (kaynak) {
+      r.paraOdulu = kaynak.paraOdulu;
+      r.itibarOdulu = kaynak.itibarOdulu;
+      r.teselliPara = kaynak.teselliPara;
+      r.cekinmeEsik1 = kaynak.cekinmeEsik1;
+      r.cekinmeYuzde1 = kaynak.cekinmeYuzde1;
+      r.cekinmeEsik2 = kaynak.cekinmeEsik2;
+      r.cekinmeYuzde2 = kaynak.cekinmeYuzde2;
+      r.statlar = { ...kaynak.statlar };
+    }
+  }
+  for (const d of ANTRENOR_DERSLERI) {
+    const kaynak = denge.hocaDersleri[d.id];
+    if (kaynak) Object.assign(d, kaynak);
+  }
+}
+
+dengeAboneOl(verileriDengeyleSenkronizeEt);

@@ -94,9 +94,15 @@ test('stamina düşünce dövüşçü yavaşlar ve KO anında önce ko_yavaslatm
   assert.equal(dovus.durum, 'ko_yavaslatma');
   assert.equal(dovus.kazanan, 'oyuncu');
   assert.equal(dovus.hitstopKalanMs, 0);
+  assert.equal(dovus.koYavaslatmaKalanMs, 1500);
 
-  // Yavaşlatma süresi akınca 'bitti' durumuna geçer
-  for (let i = 0; i < 20; i += 1) {
+  const aksiyonOncesi = dovus.oyuncu.aksiyonKalanMs;
+  dovus = dovusAdimi(dovus, 100, () => 0.5);
+  assert.equal(dovus.koYavaslatmaKalanMs, 1400);
+  assert.equal(Math.round(aksiyonOncesi - dovus.oyuncu.aksiyonKalanMs), 30);
+
+  // Yavaşlatma süresi (1.5 sn) akınca 'bitti' durumuna geçer
+  for (let i = 0; i < 14; i += 1) {
     dovus = dovusAdimi(dovus, 100, () => 0.5);
   }
   assert.equal(dovus.durum, 'bitti');

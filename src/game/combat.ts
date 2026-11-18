@@ -23,6 +23,7 @@ import {
   YetenekPasifOzeti,
 } from './engine';
 import { KarakterGorunumu } from './theme';
+import { DENGE } from './balance';
 
 const HAMLE_HARITASI = new Map(HAMLE_LISTESI.map((h) => [h.id, h]));
 
@@ -44,6 +45,7 @@ export interface YuzenSayi {
   toplamMs: number;
   ofsetX: number;
   ofsetY?: number;
+  hasarDegeri?: number;
   efekt?:
     | 'yumruk'
     | 'tekme'
@@ -115,9 +117,16 @@ function sinirla(deger: number, min: number, maks: number): number {
 }
 
 function vurusAraligiMs(ceviklik: number, staminaYuzde: number): number {
-  const temel = sinirla(1560 - ceviklik * 72, 740, 1700);
-  // Stamina 15'in ya da %22'nin altına düşünce dövüşçü belirgin biçimde yavaşlar
-  return staminaYuzde < 0.22 ? Math.round(temel * 1.7) : temel;
+  const d = DENGE.dovus;
+  const temel = sinirla(
+    d.vurusAraligiTabanMs - ceviklik * d.vurusAraligiCeviklikCarpan,
+    d.vurusAraligiMinMs,
+    d.vurusAraligiMaxMs
+  );
+  // Stamina %22'nin altına düşünce dövüşçü belirgin biçimde yavaşlar
+  return staminaYuzde < d.yavaslamaStaminaOran
+    ? Math.round(temel * d.vurusAraligiYavasCarpan)
+    : temel;
 }
 
 function hamleBul(hamleId: string): HamleVerisi {
@@ -151,16 +160,23 @@ export function dovusBaslat(
 ): DovusDurumu {
   const turetilmis = hesaplaTuretilmisDegerler(oyun);
 
+  const v = DENGE.verimVeEsikler;
+  const d = DENGE.dovus;
+
   // Düşük açlık veya uyku ile ringe çıkılırsa başlangıç staminası biraz düşer
   const hazirlikCarpani =
-    oyun.tokluk < 25 || oyun.uyku < 25 ? 0.78 : oyun.uyuyakalmaCezasi ? 0.85 : 1.0;
+    oyun.tokluk < v.hazirlikDusukEsik || oyun.uyku < v.hazirlikDusukEsik
+      ? v.hazirlikDusukStaminaCarpan
+      : oyun.uyuyakalmaCezasi
+        ? v.uyuyakalmaStaminaCarpan
+        : 1.0;
 
   let oyuncuHazirlikCezasiMetni: string | null = null;
-  if (oyun.tokluk < 25 && oyun.uyku < 25) {
+  if (oyun.tokluk < v.hazirlikDusukEsik && oyun.uyku < v.hazirlikDusukEsik) {
     oyuncuHazirlikCezasiMetni = '-%22 Başl. Stam (Aç + Bitkin)';
-  } else if (oyun.tokluk < 25) {
+  } else if (oyun.tokluk < v.hazirlikDusukEsik) {
     oyuncuHazirlikCezasiMetni = '-%22 Başl. Stam (Açlık)';
-  } else if (oyun.uyku < 25) {
+  } else if (oyun.uyku < v.hazirlikDusukEsik) {
     oyuncuHazirlikCezasiMetni = '-%22 Başl. Stam (Bitkin)';
   } else if (oyun.uyuyakalmaCezasi) {
     oyuncuHazirlikCezasiMetni = '-%15 Başl. Stam (Uyuyakalma)';
@@ -174,16 +190,22 @@ export function dovusBaslat(
   };
 
   const oyuncuMaksStam = turetilmis.maksStamina;
-  const rakipMaksCan = 60 + rakip.statlar.dayaniklilik * 8;
-  const rakipMaksStam = 40 + rakip.statlar.dayaniklilik * 6;
+  const rakipMaksCan =
+    v.maksCanTaban + rakip.statlar.dayaniklilik * v.maksCanDayaniklilikCarpan;
+  const rakipMaksStam =
+    v.maksStaminaTaban + rakip.statlar.dayaniklilik * v.maksStaminaDayaniklilikCarpan;
   const cekinme = rakipCekinmeHesapla(oyun.itibar?.korku ?? 0, rakip);
   const rakipCekinmeYuzde = cekinme.yuzde;
   const rakipBaslangicStam = Math.max(
-    10,
+    d.rakipBaslangicMinStamina,
     Math.round(rakipMaksStam * (1 - rakipCekinmeYuzde / 100))
   );
   const rakipIlkSayacMs =
-    cekinme.asama === 2 ? 1750 : cekinme.asama === 1 ? 1450 : 1100;
+    cekinme.asama === 2
+      ? d.rakipIlkSayacMsCekinme2
+      : cekinme.asama === 1
+        ? d.rakipIlkSayacMsCekinme1
+        : d.rakipIlkSayacMsNormal;
 
   return {
     rakipId: rakip.id,
@@ -217,14 +239,14 @@ export function dovusBaslat(
       aksiyon: 'idle',
       aksiyonKalanMs: 0,
       aksiyonToplamMs: 400,
-      otomatikSayacMs: 850,
+      otomatikSayacMs: d.oyuncuIlkSayacMs,
       hazirlananHamleId: null,
       blokKalanMs: 0,
       kacinmaKalanMs: 0,
       kacinmaBonusu: 0,
       mukemmelSavunmaKalanMs: 0,
       karsiSaldiriKalanMs: 0,
-      karsiSaldiriCarpan: 1.38,
+      karsiSaldiriCarpan: d.karsiSaldiriStandartCarpan,
       darbeFlasMs: 0,
       yavasladiMi: false,
       siraHamleId: null,
@@ -258,7 +280,7 @@ export function dovusBaslat(
       kacinmaBonusu: 0,
       mukemmelSavunmaKalanMs: 0,
       karsiSaldiriKalanMs: 0,
-      karsiSaldiriCarpan: 1.38,
+      karsiSaldiriCarpan: d.karsiSaldiriStandartCarpan,
       darbeFlasMs: 0,
       yavasladiMi: false,
       siraHamleId: null,
@@ -298,7 +320,7 @@ export function oyuncuHamleSec(dovus: DovusDurumu, hamleId: string): DovusDurumu
     const mukemmelZamanlama = Boolean(
       rakipHazirHamle &&
         rakipHazirHamle.tur !== 'kacinma' &&
-        dovus.rakip.otomatikSayacMs <= 550
+        dovus.rakip.otomatikSayacMs <= DENGE.dovus.telgrafPenceresiMs
     );
 
     const yeniBeklemeler = {
@@ -475,13 +497,15 @@ function sayacAzalt(
 }
 
 function dovuscuTick(d: DovuscuDurumu, dtMs: number): DovuscuDurumu {
+  const dengeDovus = DENGE.dovus;
   const stamOran = d.stamina / Math.max(1, d.maksStamina);
   // Stamina yenilenmesi: Dayanıklılık ve pasif yetenekler hızlandırır; nefessizken hafif yavaşlar
   const pasifStaminaCarpan = 1 + (d.pasifler?.staminaToparlanmaYuzde ?? 0) / 100;
   const regenSaniye =
-    (8.5 + d.statlar.dayaniklilik * 0.65) *
+    (dengeDovus.staminaRegenTaban +
+      d.statlar.dayaniklilik * dengeDovus.staminaRegenDayaniklilikCarpan) *
     pasifStaminaCarpan *
-    (stamOran < 0.2 ? 0.78 : 1);
+    (stamOran < dengeDovus.staminaRegenDusukOran ? dengeDovus.staminaRegenDusukCarpan : 1);
   const yeniStamina = sinirla(d.stamina + (regenSaniye * dtMs) / 1000, 0, d.maksStamina);
 
   const aksiyonKalanMs = Math.max(0, d.aksiyonKalanMs - dtMs);
@@ -493,7 +517,7 @@ function dovuscuTick(d: DovuscuDurumu, dtMs: number): DovuscuDurumu {
   return {
     ...d,
     stamina: yeniStamina,
-    yavasladiMi: yeniStamina / Math.max(1, d.maksStamina) < 0.22,
+    yavasladiMi: yeniStamina / Math.max(1, d.maksStamina) < dengeDovus.yavaslamaStaminaOran,
     aksiyon,
     aksiyonKalanMs,
     blokKalanMs: Math.max(0, d.blokKalanMs - dtMs),
@@ -559,7 +583,10 @@ function saldiriCoz(
     if (mukemmelMi || rng() * 100 <= kacinmaSansi) {
       const karsiPencere = mukemmelMi ? 2600 : 1800;
       const karsiCarpan =
-        (mukemmelMi ? 1.65 : 1.38) + (savunan.pasifler?.karsiSaldiriCarpanBonusu ?? 0);
+        (mukemmelMi
+          ? DENGE.dovus.karsiSaldiriMukemmelCarpan
+          : DENGE.dovus.karsiSaldiriStandartCarpan) +
+        (savunan.pasifler?.karsiSaldiriCarpanBonusu ?? 0);
       return {
         saldiran: guncelSaldiran,
         savunan: {
@@ -603,7 +630,7 @@ function saldiriCoz(
       savunan.statlar.refleks * 1.5 +
       (guncelSaldiran.pasifler?.isabetBonusu ?? 0) +
       (karsiAktif ? 18 : 0) -
-      (stamOran < 0.2 ? 12 : 0),
+      (stamOran < DENGE.dovus.staminaRegenDusukOran ? 12 : 0),
     30,
     98
   );
@@ -613,7 +640,7 @@ function saldiriCoz(
       saldiran: {
         ...guncelSaldiran,
         karsiSaldiriKalanMs: 0,
-        karsiSaldiriCarpan: 1.38,
+        karsiSaldiriCarpan: DENGE.dovus.karsiSaldiriStandartCarpan,
       },
       savunan,
       yeniSayilar: [
@@ -637,6 +664,7 @@ function saldiriCoz(
   }
 
   // Kombo zinciri (yalnızca oyuncu saldırıları için 3.5 sn pencere)
+  const dengeDovus = DENGE.dovus;
   let yeniKomboEtiket: string | null = guncelSaldiran.sonKomboEtiketi ?? null;
   let yeniKomboSayisi = guncelSaldiran.komboZincirSayisi ?? 0;
   let yeniKomboSure = guncelSaldiran.komboSuresiKalanMs ?? 0;
@@ -651,27 +679,27 @@ function saldiriCoz(
     if (hamle.komboEtiketi === 'acilim') {
       yeniKomboEtiket = 'acilim';
       yeniKomboSayisi = 1;
-      yeniKomboSure = 3500;
+      yeniKomboSure = dengeDovus.komboPenceresiMs;
     } else if (hamle.komboEtiketi === 'denge_bozucu') {
       if (oncekiEtiket === 'acilim') {
         yeniKomboEtiket = 'denge_bozucu';
         yeniKomboSayisi = Math.min(3, Math.max(2, oncekiSayi + 1));
-        yeniKomboSure = 3500;
+        yeniKomboSure = dengeDovus.komboPenceresiMs;
         komboTamamlandi = 2;
-        komboBonusCarpan = 1.25;
+        komboBonusCarpan = dengeDovus.kombo2xCarpan;
       } else {
         yeniKomboEtiket = 'denge_bozucu';
         yeniKomboSayisi = 1;
-        yeniKomboSure = 3500;
+        yeniKomboSure = dengeDovus.komboPenceresiMs;
       }
     } else if (hamle.komboEtiketi === 'bitirici') {
       if (oncekiEtiket === 'acilim' || oncekiEtiket === 'denge_bozucu') {
         if (oncekiEtiket === 'denge_bozucu' && oncekiSayi >= 2) {
           komboTamamlandi = 3;
-          komboBonusCarpan = 1.35;
+          komboBonusCarpan = dengeDovus.kombo3xCarpan;
         } else {
           komboTamamlandi = 2;
-          komboBonusCarpan = 1.25;
+          komboBonusCarpan = dengeDovus.kombo2xCarpan;
         }
         yeniKomboEtiket = null;
         yeniKomboSayisi = 0;
@@ -685,7 +713,8 @@ function saldiriCoz(
   }
 
   // Hasar hesabı: Güç, hamle temel hasarı, pasif yetenek bonusu, karşı saldırı, kombo ve blok kesintisi
-  const gucCarpani = 0.72 + guncelSaldiran.statlar.guc * 0.11;
+  const gucCarpani =
+    dengeDovus.gucHasarTaban + guncelSaldiran.statlar.guc * dengeDovus.gucHasarCarpan;
   const turPasifYuzde =
     hamle.tur === 'yumruk'
       ? (guncelSaldiran.pasifler?.yumrukHasarYuzde ?? 0)
@@ -693,7 +722,9 @@ function saldiriCoz(
         ? (guncelSaldiran.pasifler?.tekmeHasarYuzde ?? 0)
         : 0;
   const pasifHasarCarpani = 1 + turPasifYuzde / 100;
-  const karsiCarpani = karsiAktif ? (guncelSaldiran.karsiSaldiriCarpan ?? 1.38) : 1.0;
+  const karsiCarpani = karsiAktif
+    ? (guncelSaldiran.karsiSaldiriCarpan ?? dengeDovus.karsiSaldiriStandartCarpan)
+    : 1.0;
   const bloktaMi = savunan.blokKalanMs > 0;
   const mukemmelBlokMu = bloktaMi && (savunan.mukemmelSavunmaKalanMs ?? 0) > 0;
   const blokKesintiBonusu = (savunan.pasifler?.blokKesintiYuzde ?? 0) / 100;
@@ -702,7 +733,7 @@ function saldiriCoz(
     : bloktaMi
       ? Math.max(0.15, 0.35 - blokKesintiBonusu)
       : 1.0;
-  const rastgeleSapma = 0.9 + rng() * 0.2;
+  const rastgeleSapma = dengeDovus.rastgeleSapmaTaban + rng() * dengeDovus.rastgeleSapmaAralik;
 
   const hamHasar =
     hamle.temelHasar *
@@ -723,7 +754,7 @@ function saldiriCoz(
       ? 4
       : bloktaMi
         ? 2
-        : hamle.temelHasar >= 20 || karsiAktif
+        : hamle.temelHasar >= dengeDovus.agirVurusHasarEsigi || karsiAktif
           ? 6
           : 3;
   if (!koOlduMu && komboTamamlandi > 0) {
@@ -738,7 +769,7 @@ function saldiriCoz(
       hitstopMs = 85;
     } else if (mukemmelBlokMu) {
       hitstopMs = 80;
-    } else if (hamle.temelHasar >= 20 || karsiAktif) {
+    } else if (hamle.temelHasar >= dengeDovus.agirVurusHasarEsigi || karsiAktif) {
       hitstopMs = 85;
     }
   }
@@ -763,7 +794,7 @@ function saldiriCoz(
       ? 'mukemmel'
       : bloktaMi
         ? 'blok'
-        : hamle.temelHasar >= 20 || karsiAktif
+        : hamle.temelHasar >= dengeDovus.agirVurusHasarEsigi || karsiAktif
           ? 'sert_yumruk'
           : hamle.tur === 'tekme'
             ? 'tekme'
@@ -778,6 +809,7 @@ function saldiriCoz(
       kalanMs: mukemmelBlokMu ? 1050 : 900,
       toplamMs: mukemmelBlokMu ? 1050 : 900,
       ofsetX: (rng() - 0.5) * 14,
+      hasarDegeri: netHasar,
       efekt: efektTuru,
     },
   ];
@@ -798,7 +830,7 @@ function saldiriCoz(
     guncelSayiId += 1;
   }
 
-  const blokStaminaOdulu = mukemmelBlokMu ? 12 : 0;
+  const blokStaminaOdulu = mukemmelBlokMu ? dengeDovus.mukemmelBlokStaminaOdulu : 0;
 
   const olayMetni = koOlduMu
     ? `${guncelSaldiran.lakap} ${hamle.isim} ile işi bitirdi! NAKAVT!`
@@ -812,7 +844,7 @@ function saldiriCoz(
     saldiran: {
       ...guncelSaldiran,
       karsiSaldiriKalanMs: 0,
-      karsiSaldiriCarpan: 1.38,
+      karsiSaldiriCarpan: dengeDovus.karsiSaldiriStandartCarpan,
       vurduguIsabet: guncelSaldiran.vurduguIsabet + 1,
       sonKomboEtiketi: yeniKomboEtiket,
       komboZincirSayisi: yeniKomboSayisi,
@@ -850,15 +882,16 @@ export function dovusAdimi(
 
   const guvenliDt = Math.min(Math.max(dtMs, 0), 100);
 
-  // KO anında dramatik yavaşlatma fazı (hitstop tarafından geciktirilmez)
+  // KO anında yavaş çekim
   if (dovus.durum === 'ko_yavaslatma') {
     const kalan = Math.max(0, dovus.koYavaslatmaKalanMs - guvenliDt);
-    const sarsinti = Math.max(0, dovus.ekranSarsintiMs - guvenliDt);
+    const yavasDt = guvenliDt * DENGE.dovus.koHizCarpani;
+    const sarsinti = Math.max(0, dovus.ekranSarsintiMs - yavasDt);
     const bittiMi = kalan <= 0;
     const yuzenSayilar =
       dovus.yuzenSayilar.length > 0
         ? dovus.yuzenSayilar
-            .map((s) => ({ ...s, kalanMs: s.kalanMs - guvenliDt * 0.45 }))
+            .map((s) => ({ ...s, kalanMs: s.kalanMs - yavasDt }))
             .filter((s) => s.kalanMs > 0)
         : dovus.yuzenSayilar;
 
@@ -872,11 +905,13 @@ export function dovusAdimi(
       yuzenSayilar,
       oyuncu: {
         ...dovus.oyuncu,
-        darbeFlasMs: bittiMi ? 0 : Math.max(0, dovus.oyuncu.darbeFlasMs - guvenliDt),
+        aksiyonKalanMs: Math.max(0, dovus.oyuncu.aksiyonKalanMs - yavasDt),
+        darbeFlasMs: bittiMi ? 0 : Math.max(0, dovus.oyuncu.darbeFlasMs - yavasDt),
       },
       rakip: {
         ...dovus.rakip,
-        darbeFlasMs: bittiMi ? 0 : Math.max(0, dovus.rakip.darbeFlasMs - guvenliDt),
+        aksiyonKalanMs: Math.max(0, dovus.rakip.aksiyonKalanMs - yavasDt),
+        darbeFlasMs: bittiMi ? 0 : Math.max(0, dovus.rakip.darbeFlasMs - yavasDt),
       },
     };
   }
@@ -917,10 +952,10 @@ export function dovusAdimi(
           .filter((s) => s.kalanMs > 0)
       : dovus.yuzenSayilar;
 
-  // Rakibin sıradaki hamlesini 550 ms hazırlık penceresinde kilitle (telgraf)
+  // Rakibin sıradaki hamlesini hazırlık penceresinde kilitle (telgraf)
   if (
     rakip.otomatikSayacMs > 0 &&
-    rakip.otomatikSayacMs <= 550 &&
+    rakip.otomatikSayacMs <= DENGE.dovus.telgrafPenceresiMs &&
     !rakip.hazirlananHamleId &&
     rakip.aksiyon !== 'darbe_aldi'
   ) {
@@ -1072,7 +1107,11 @@ export function dovusAdimi(
     const oOran = oyuncu.can / Math.max(1, oyuncu.maksCan);
     const rOran = rakip.can / Math.max(1, rakip.maksCan);
     const kazanan: 'oyuncu' | 'rakip' | 'berabere' =
-      Math.abs(oOran - rOran) <= 0.03 ? 'berabere' : oOran > rOran ? 'oyuncu' : 'rakip';
+      Math.abs(oOran - rOran) <= DENGE.dovus.berabereOranEsigi
+        ? 'berabere'
+        : oOran > rOran
+          ? 'oyuncu'
+          : 'rakip';
     return {
       ...dovus,
       durum: 'bitti',

@@ -3,9 +3,20 @@ import { Shield, Swords, Zap } from 'lucide-react';
 import { HAMLE_LISTESI, RakipTanimi } from '../data/gameData';
 import { dovusAdimi, dovusBaslat, DovusDurumu, oyuncuHamleSec } from '../game/combat';
 import { MacSonucOzeti, OyunDurumu } from '../game/engine';
+import {
+  efektKatmaniniAyir,
+  efektKatmaniniBagla,
+  flas,
+  hasarSayisi,
+  hitStop,
+  hitStopAktifMi,
+  parcacik,
+  sarsinti,
+} from '../game/effects';
 import { playSfx, titresimTetikle } from '../game/sound';
 import { ArenaCombatCanvas } from './ArenaCombatCanvas';
 import { AudioControls } from './AudioControls';
+import { AtmosphereLayer } from './AtmosphereLayer';
 
 interface ArenaCombatViewProps {
   oyun: OyunDurumu;
@@ -45,10 +56,21 @@ export const ArenaCombatView: React.FC<ArenaCombatViewProps> = ({
   const onMacBittiRef = useRef(onMacBitti);
   const sonIslenenSayiIdRef = useRef(0);
   const oncekiDurumRef = useRef<DovusDurumu['durum']>('devam_ediyor');
+  const arenaKartRef = useRef<HTMLDivElement | null>(null);
+  const arenaSahneRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     onMacBittiRef.current = onMacBitti;
   }, [onMacBitti]);
+
+  useEffect(() => {
+    if (arenaSahneRef.current) {
+      efektKatmaniniBagla(arenaSahneRef.current, arenaKartRef.current);
+    }
+    return () => {
+      efektKatmaniniAyir();
+    };
+  }, []);
 
   // Maç başlangıç gong sesi
   useEffect(() => {
@@ -57,29 +79,64 @@ export const ArenaCombatView: React.FC<ArenaCombatViewProps> = ({
 
   const efektleriIsle = useCallback((durum: DovusDurumu) => {
     let nakavtCaldi = false;
+    const sahneEl = arenaSahneRef.current;
+    const gen = sahneEl?.clientWidth || 640;
+    const yuk = sahneEl?.clientHeight || 280;
+
     for (const s of durum.yuzenSayilar) {
       if (s.id <= sonIslenenSayiIdRef.current) continue;
       sonIslenenSayiIdRef.current = s.id;
+
+      const hedefX = (s.hedef === 'oyuncu' ? gen * 0.41 : gen * 0.59) + s.ofsetX;
+      const hedefY = yuk * 0.42 + (s.ofsetY ?? 0);
+
       switch (s.efekt) {
         case 'mukemmel':
           playSfx('mukemmel');
           titresimTetikle(32);
+          sarsinti(4, 120);
+          hitStop(60);
+          if (s.hasarDegeri !== undefined) {
+            hasarSayisi(hedefX, hedefY, s.hasarDegeri, 'mukemmel');
+          }
           break;
         case 'kombo':
           playSfx('kombo');
           titresimTetikle(35);
+          sarsinti(6, 180);
+          hitStop(100);
+          flas(0.22, 100);
+          parcacik(hedefX, hedefY + 14, { adet: 14, renk: '#D99B38', hiz: 165 });
           break;
         case 'sert_yumruk':
           playSfx('sert_vurus', { volume: 1 });
           titresimTetikle(35);
+          sarsinti(6, 180);
+          hitStop(100);
+          flas(0.24, 100);
+          parcacik(hedefX, hedefY + 20, { adet: 14, renk: '#FB923C', hiz: 170 });
+          if (s.hasarDegeri !== undefined) {
+            hasarSayisi(hedefX, hedefY, s.hasarDegeri, 'agir');
+          }
           break;
         case 'tekme':
           playSfx('tekme', { volume: 0.92 });
           titresimTetikle(26);
+          sarsinti(4, 120);
+          hitStop(60);
+          parcacik(hedefX, hedefY + 20, { adet: 8, renk: '#FDE047', hiz: 140 });
+          if (s.hasarDegeri !== undefined) {
+            hasarSayisi(hedefX, hedefY, s.hasarDegeri, 'orta');
+          }
           break;
         case 'blok':
           playSfx('blok');
           titresimTetikle(22);
+          sarsinti(2, 80);
+          hitStop(30);
+          if (s.hasarDegeri !== undefined) {
+            hasarSayisi(hedefX, hedefY, s.hasarDegeri, 'blok');
+          }
           break;
         case 'kacinma':
           playSfx('kacinma');
@@ -88,10 +145,22 @@ export const ArenaCombatView: React.FC<ArenaCombatViewProps> = ({
         case 'yumruk':
           playSfx('yumruk', { volume: 0.85 });
           titresimTetikle(22);
+          sarsinti(2, 80);
+          hitStop(30);
+          parcacik(hedefX, hedefY + 20, { adet: 5, renk: '#EAECEF', hiz: 110 });
+          if (s.hasarDegeri !== undefined) {
+            hasarSayisi(hedefX, hedefY, s.hasarDegeri, 'hafif');
+          }
           break;
         case 'nakavt':
           playSfx('nakavt');
           titresimTetikle(45);
+          sarsinti(6, 180);
+          flas(0.28, 100, '#EF4444');
+          parcacik(hedefX, hedefY + 20, { adet: 20, renk: '#EF4444', hiz: 190 });
+          if (s.hasarDegeri !== undefined) {
+            hasarSayisi(hedefX, hedefY, s.hasarDegeri, 'nakavt');
+          }
           nakavtCaldi = true;
           break;
       }
@@ -101,6 +170,8 @@ export const ArenaCombatView: React.FC<ArenaCombatViewProps> = ({
       if (!nakavtCaldi) {
         playSfx('nakavt');
         titresimTetikle(45);
+        sarsinti(6, 180);
+        flas(0.28, 100, '#EF4444');
       }
     }
     oncekiDurumRef.current = durum.durum;
@@ -150,13 +221,33 @@ export const ArenaCombatView: React.FC<ArenaCombatViewProps> = ({
 
       const mevcut = dovusRef.current;
       if (mevcut.durum !== 'bitti') {
-        const sonraki = dovusAdimi(mevcut, dtMs);
+        if (hitStopAktifMi()) {
+          rafId = requestAnimationFrame(adim);
+          return;
+        }
+
+        const hamSonraki = dovusAdimi(mevcut, dtMs);
+        const sonraki =
+          hamSonraki.hitstopKalanMs > 0
+            ? { ...hamSonraki, hitstopKalanMs: 0 }
+            : hamSonraki;
         dovusRef.current = sonraki;
         efektleriIsle(sonraki);
 
         if (sonraki.durum === 'bitti' && sonraki.kazanan && !sonucIslendiRef.current) {
           sonucIslendiRef.current = true;
           playSfx(sonraki.kazanan === 'oyuncu' ? 'mac_kazanma' : 'mac_kaybetme');
+          if (sonraki.kazanan === 'oyuncu' && arenaSahneRef.current) {
+            const w = arenaSahneRef.current.clientWidth || 640;
+            const h = arenaSahneRef.current.clientHeight || 280;
+            parcacik(w * 0.5, h * 0.42, {
+              adet: 16,
+              renk: '#D99B38',
+              boyutPx: 5,
+              hiz: 170,
+              sureMs: 450,
+            });
+          }
           const ozet = onMacBittiRef.current(sonraki.kazanan);
           setSonucOzeti(ozet);
           setGorunum(sonraki);
@@ -177,13 +268,26 @@ export const ArenaCombatView: React.FC<ArenaCombatViewProps> = ({
   }, [efektleriIsle]);
 
   const { oyuncu, rakip: rakipDurum } = gorunum;
+  const macBitti = gorunum.durum === 'bitti' && Boolean(sonucOzeti);
+  const kazandi = macBitti && sonucOzeti?.kazanan === 'oyuncu';
+  const kaybetti = macBitti && sonucOzeti?.kazanan === 'rakip';
 
   return (
     <div
       data-testid="arena-combat-view"
-      className="min-h-[100dvh] w-full bg-[#0B0E17] text-[#EAECEF] flex flex-col items-center justify-center p-2.5 sm:p-5"
+      data-match-outcome={kazandi ? 'win' : kaybetti ? 'lose' : macBitti ? 'draw' : 'active'}
+      className="min-h-[100dvh] w-full bg-[#0B0E17] text-[#EAECEF] flex flex-col items-center justify-center p-2.5 sm:p-5 transition-colors duration-300"
     >
-      <div className="w-full max-w-4xl border border-[#273147] bg-[#121724] flex flex-col">
+      <div
+        ref={arenaKartRef}
+        className={`w-full max-w-4xl border bg-[#121724] flex flex-col will-change-transform transition-all duration-300 ${
+          kazandi
+            ? 'border-[#6CC296]/80 shadow-[0_0_40px_rgba(217,155,56,0.22)] brightness-105'
+            : kaybetti
+              ? 'border-[#8A2626]/80 brightness-90'
+              : 'border-[#273147]'
+        }`}
+      >
         {/* Üst Eşleşme Şeridi */}
         <header className="border-b border-[#273147] bg-[#0B0E17] px-3 py-2.5 sm:px-4 flex flex-wrap items-center justify-between gap-2">
           <div className="flex flex-wrap items-center gap-2 min-w-0">
@@ -223,9 +327,27 @@ export const ArenaCombatView: React.FC<ArenaCombatViewProps> = ({
           </div>
         </header>
 
-        {/* Gerçek Zamanlı Pixel Art Arena Sahnesi */}
-        <div className="relative h-56 sm:h-72 md:h-80 w-full bg-[#090D1A] border-b border-[#273147]">
+        {/* Gerçek Zamanlı Pixel Art Arena Sahnesi + Efekt Katmanı */}
+        <div
+          ref={arenaSahneRef}
+          className="relative h-56 sm:h-72 md:h-80 w-full bg-[#090D1A] border-b border-[#273147] overflow-hidden"
+        >
           <ArenaCombatCanvas dovusRef={dovusRef} />
+          <AtmosphereLayer mekanId="sokak_arena" />
+          {kazandi && (
+            <div
+              aria-hidden="true"
+              data-testid="match-win-glow"
+              className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(245,208,138,0.22)_0%,rgba(108,194,150,0.08)_55%,transparent_100%)] transition-opacity duration-300"
+            />
+          )}
+          {kaybetti && (
+            <div
+              aria-hidden="true"
+              data-testid="match-lose-darken"
+              className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(11,14,23,0.32)_0%,rgba(5,7,12,0.72)_100%)] transition-opacity duration-500"
+            />
+          )}
         </div>
 
         {/* Tek Satır Canlı Dövüş Akışı */}

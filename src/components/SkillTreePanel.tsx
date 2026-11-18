@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Check, Lock, Sparkles } from 'lucide-react';
 import {
   HAMLE_LISTESI,
@@ -39,7 +39,17 @@ export const SkillTreePanel: React.FC<SkillTreePanelProps> = ({
   onYetenekAc,
 }) => {
   const [seciliDal, setSeciliDal] = useState<YetenekDaliId>('yumruk');
+  const [parlayanId, setParlayanId] = useState<string | null>(null);
   const acikIds = useMemo(() => state.acikYetenekIds ?? [], [state.acikYetenekIds]);
+  const prevAcikIdsRef = useRef<string[]>(acikIds);
+
+  useEffect(() => {
+    const yeniAcilan = acikIds.find((id) => !prevAcikIdsRef.current.includes(id));
+    if (yeniAcilan) {
+      setParlayanId(yeniAcilan);
+    }
+    prevAcikIdsRef.current = acikIds;
+  }, [acikIds]);
   const ogrenilenHocaDersIds = useMemo(
     () => state.ogrenilenHocaDersIds ?? [],
     [state.ogrenilenHocaDersIds]
@@ -241,13 +251,17 @@ export const SkillTreePanel: React.FC<SkillTreePanelProps> = ({
 
               <div
                 data-testid={`skill-node-${dugum.id}`}
+                data-just-unlocked={parlayanId === dugum.id ? 'true' : undefined}
+                onAnimationEnd={() => {
+                  if (parlayanId === dugum.id) setParlayanId(null);
+                }}
                 className={`border p-3 sm:p-4 transition-colors ${
                   acikMi
                     ? 'border-[#3D8C66] bg-[#101C18]'
                     : acilabilir
                       ? 'bg-[#151B2B]'
                       : 'border-[#273147] bg-[#0D1019]'
-                }`}
+                } ${parlayanId === dugum.id ? 'animate-yetenek-parlama' : ''}`}
                 style={
                   !acikMi && acilabilir
                     ? { borderColor: aktifDalTanimi.vurguRenk }

@@ -41,6 +41,12 @@ import {
   saatMetni,
 } from '../game/engine';
 import { playSfx } from '../game/sound';
+import {
+  efektKatmaniniAyir,
+  efektKatmaniniBagla,
+  hasarSayisi,
+  reducedMotionAlgilandiMi,
+} from '../game/effects';
 import { MekanId } from '../game/theme';
 import { NeighborhoodCanvas } from './NeighborhoodCanvas';
 import { MovesPanel } from './MovesPanel';
@@ -48,6 +54,7 @@ import { SkillTreePanel } from './SkillTreePanel';
 import { ReputationPanel } from './ReputationPanel';
 import { EventModal } from './EventModal';
 import { AudioControls } from './AudioControls';
+import { AtmosphereLayer } from './AtmosphereLayer';
 
 interface HomeHubProps {
   state: OyunDurumu;
@@ -122,21 +129,93 @@ export const HomeHub: React.FC<HomeHubProps> = ({
   const [aksiyonDarbesi, setAksiyonDarbesi] = useState(0);
   const [sonAksiyonTuru, setSonAksiyonTuru] = useState<StatId>('guc');
   const [sifirlamaOnayi, setSifirlamaOnayi] = useState(false);
+  const [gecisDurumu, setGecisDurumu] = useState<{
+    tur: 'mekan' | 'uyku';
+    gorunur: boolean;
+    yeniGunBaslik: string | null;
+  }>({
+    tur: 'mekan',
+    gorunur: false,
+    yeniGunBaslik: null,
+  });
+  const [kiraFlasAnahtari, setKiraFlasAnahtari] = useState(0);
+  const sahneKonteynerRef = useRef<HTMLDivElement | null>(null);
   const sagPanelRef = useRef<HTMLElement | null>(null);
+  const perdeRef = useRef<HTMLDivElement | null>(null);
+  const gecisRafRef = useRef<number>(0);
+  const gecisAktifRef = useRef<boolean>(false);
   const prevParaRef = useRef(state.para);
   const prevGunRef = useRef(state.gun);
   const prevKiraUyariRef = useRef(state.kiraUyariSayisi);
+  const prevYetenekPuaniRef = useRef(state.yetenekPuani ?? 0);
+  const prevStatToplamRef = useRef<Record<StatId, number>>({
+    guc: state.statlar.guc.deger * 100 + state.statlar.guc.ilerleme,
+    ceviklik: state.statlar.ceviklik.deger * 100 + state.statlar.ceviklik.ilerleme,
+    refleks: state.statlar.refleks.deger * 100 + state.statlar.refleks.ilerleme,
+    dayaniklilik:
+      state.statlar.dayaniklilik.deger * 100 + state.statlar.dayaniklilik.ilerleme,
+  });
+  const sonKiraFlasGunuRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (sahneKonteynerRef.current) {
+      efektKatmaniniBagla(sahneKonteynerRef.current, null);
+    }
+    return () => {
+      efektKatmaniniAyir();
+    };
+  }, []);
 
   useEffect(() => {
     sagPanelRef.current?.scrollTo({ top: 0 });
   }, [state.aktifMekan, sagGorunum]);
 
+  useEffect(() => {
+    return () => {
+      if (gecisRafRef.current && typeof cancelAnimationFrame === 'function') {
+        cancelAnimationFrame(gecisRafRef.current);
+      }
+    };
+  }, []);
+
   const turetilmis = useMemo(() => hesaplaTuretilmisDegerler(state), [state]);
 
   useEffect(() => {
+    const sahne = sahneKonteynerRef.current;
+    const gen = sahne?.clientWidth || 560;
+    const yuk = sahne?.clientHeight || 220;
+
     if (state.para > prevParaRef.current) {
       playSfx('para_kazanma');
+      const kazanc = state.para - prevParaRef.current;
+      hasarSayisi(gen - 76, 52, `+${kazanc} ₺`, 'kazanc');
     }
+
+    let xpSatiri = 0;
+    for (const tanim of STAT_TANIMLARI) {
+      const yeniToplam =
+        state.statlar[tanim.id].deger * 100 + state.statlar[tanim.id].ilerleme;
+      const eskiToplam = prevStatToplamRef.current[tanim.id];
+      if (yeniToplam > eskiToplam) {
+        const xpArtisi = yeniToplam - eskiToplam;
+        hasarSayisi(
+          gen * 0.45 + xpSatiri * 18,
+          yuk * 0.48 - xpSatiri * 18,
+          `+${xpArtisi} ${tanim.kisaKod} XP`,
+          'kazanc'
+        );
+        xpSatiri += 1;
+      }
+      prevStatToplamRef.current[tanim.id] = yeniToplam;
+    }
+
+    const guncelYp = state.yetenekPuani ?? 0;
+    if (guncelYp > prevYetenekPuaniRef.current) {
+      const ypArtis = guncelYp - prevYetenekPuaniRef.current;
+      hasarSayisi(gen * 0.58, yuk * 0.36, `+${ypArtis} YP`, 'kazanc');
+    }
+    prevYetenekPuaniRef.current = guncelYp;
+
     if (state.gun > prevGunRef.current) {
       const kiraUyariTetiklendi =
         state.kiraUyariSayisi > prevKiraUyariRef.current ||
@@ -150,9 +229,23 @@ export const HomeHub: React.FC<HomeHubProps> = ({
     state.para,
     state.gun,
     state.kiraUyariSayisi,
+    state.statlar,
+    state.yetenekPuani,
     turetilmis.kirayaKalanGun,
     turetilmis.kiraEksikTutar,
   ]);
+  const kiraYaklasti = turetilmis.kirayaKalanGun <= 2 && turetilmis.kiraEksikTutar > 0;
+
+  useEffect(() => {
+    if (kiraYaklasti && !gecisDurumu.gorunur && sonKiraFlasGunuRef.current !== state.gun) {
+      sonKiraFlasGunuRef.current = state.gun;
+      setKiraFlasAnahtari((v) => v + 1);
+    }
+    if (!kiraYaklasti) {
+      sonKiraFlasGunuRef.current = null;
+    }
+  }, [kiraYaklasti, gecisDurumu.gorunur, state.gun]);
+
   const aktifDebufflar = useMemo(() => aktifDebufflariGetir(state), [state]);
   const aileRuhHali = useMemo(() => aileRuhHaliGetir(state), [state]);
   const { mevcutEv, sonrakiEv } = turetilmis;
@@ -222,13 +315,123 @@ export const HomeHub: React.FC<HomeHubProps> = ({
   };
 
   const mekanSec = (hedefMekan: MekanId) => {
-    if (hedefMekan !== state.aktifMekan) {
-      playSfx('mekan_gecis');
-    } else {
+    if (gecisAktifRef.current) return;
+    if (hedefMekan === state.aktifMekan) {
       playSfx('menu_tik');
+      setSagGorunum('mekan');
+      onMekanaGit(hedefMekan);
+      return;
     }
-    setSagGorunum('mekan');
-    onMekanaGit(hedefMekan);
+
+    playSfx('mekan_gecis');
+    if (
+      reducedMotionAlgilandiMi() ||
+      typeof requestAnimationFrame !== 'function' ||
+      typeof performance === 'undefined'
+    ) {
+      setSagGorunum('mekan');
+      onMekanaGit(hedefMekan);
+      return;
+    }
+
+    gecisAktifRef.current = true;
+    setGecisDurumu({ tur: 'mekan', gorunur: true, yeniGunBaslik: null });
+    const baslangic = performance.now();
+    let mekanDegisti = false;
+
+    const kare = (simdi: number) => {
+      const gecen = simdi - baslangic;
+      let opaklik = 0;
+      if (gecen < 200) {
+        opaklik = gecen / 200;
+      } else {
+        if (!mekanDegisti) {
+          mekanDegisti = true;
+          setSagGorunum('mekan');
+          onMekanaGit(hedefMekan);
+        }
+        opaklik = gecen < 400 ? 1 - (gecen - 200) / 200 : 0;
+      }
+
+      if (perdeRef.current) {
+        perdeRef.current.style.opacity = String(Math.max(0, Math.min(1, opaklik)));
+      }
+
+      if (gecen < 400) {
+        gecisRafRef.current = requestAnimationFrame(kare);
+      } else {
+        gecisAktifRef.current = false;
+        gecisRafRef.current = 0;
+        setGecisDurumu({ tur: 'mekan', gorunur: false, yeniGunBaslik: null });
+      }
+    };
+
+    gecisRafRef.current = requestAnimationFrame(kare);
+  };
+
+  const uyuTetikle = () => {
+    if (gecisAktifRef.current) return;
+    if (
+      reducedMotionAlgilandiMi() ||
+      typeof requestAnimationFrame !== 'function' ||
+      typeof performance === 'undefined'
+    ) {
+      onUyuVeGunuBitir();
+      return;
+    }
+
+    gecisAktifRef.current = true;
+    const hedefGun = state.gun + 1;
+    setGecisDurumu({ tur: 'uyku', gorunur: true, yeniGunBaslik: null });
+    const baslangic = performance.now();
+    let gunIlerletildi = false;
+    let baslikGosterildi = false;
+    let baslikGizlendi = false;
+
+    const kare = (simdi: number) => {
+      const gecen = simdi - baslangic;
+      let opaklik = 1;
+
+      if (gecen < 600) {
+        opaklik = Math.min(1, gecen / 500);
+      } else if (gecen < 1000) {
+        opaklik = 1;
+        if (!gunIlerletildi) {
+          gunIlerletildi = true;
+          onUyuVeGunuBitir();
+        }
+        if (!baslikGosterildi) {
+          baslikGosterildi = true;
+          setGecisDurumu({
+            tur: 'uyku',
+            gorunur: true,
+            yeniGunBaslik: `Yeni Gün · Gün ${hedefGun}`,
+          });
+        }
+      } else if (gecen < 1400) {
+        if (!baslikGizlendi) {
+          baslikGizlendi = true;
+          setGecisDurumu({ tur: 'uyku', gorunur: true, yeniGunBaslik: null });
+        }
+        opaklik = Math.max(0, 1 - (gecen - 1000) / 400);
+      } else {
+        opaklik = 0;
+      }
+
+      if (perdeRef.current) {
+        perdeRef.current.style.opacity = String(opaklik);
+      }
+
+      if (gecen < 1400) {
+        gecisRafRef.current = requestAnimationFrame(kare);
+      } else {
+        gecisAktifRef.current = false;
+        gecisRafRef.current = 0;
+        setGecisDurumu({ tur: 'mekan', gorunur: false, yeniGunBaslik: null });
+      }
+    };
+
+    gecisRafRef.current = requestAnimationFrame(kare);
   };
 
   const gorunumAcKapa = (hedef: 'itibar' | 'yetenek_agaci' | 'hamleler') => {
@@ -358,7 +561,10 @@ export const HomeHub: React.FC<HomeHubProps> = ({
       {/* SOL SÜTUN (Masaüstü) / SABİT ÜST BÖLÜM (Mobil): Pixel Art Sahne, İhtiyaçlar ve Mekan Çubuğu */}
       <section className="shrink-0 z-20 w-full lg:w-[46%] lg:sticky lg:top-0 lg:h-screen flex flex-col border-b lg:border-b-0 lg:border-r border-[#273147] bg-[#0B0E17]">
         {/* Pixel Art Sahne */}
-        <div className="relative h-48 sm:h-56 lg:h-[370px] xl:h-[430px] w-full overflow-hidden">
+        <div
+          ref={sahneKonteynerRef}
+          className="relative h-48 sm:h-56 lg:h-[370px] xl:h-[430px] w-full overflow-hidden"
+        >
           <NeighborhoodCanvas
             mekanId={state.aktifMekan}
             gorunum={state.oyuncu.gorunum}
@@ -371,10 +577,22 @@ export const HomeHub: React.FC<HomeHubProps> = ({
             aksiyonTuru={sonAksiyonTuru}
             karakterKonumX={state.aktifMekan === 'ev' ? 0.44 : 0.46}
           />
+          <AtmosphereLayer mekanId={state.aktifMekan} />
 
           {/* Üst Kenar HUD (sadece okuma) */}
-          <div className="pointer-events-none absolute inset-x-0 top-0 px-3 py-2 sm:p-4 flex items-start justify-between gap-2 bg-gradient-to-b from-black/90 via-black/45 to-transparent">
-            <div className="min-w-0">
+          <div
+            data-testid="top-hud-strip"
+            className="pointer-events-none absolute inset-x-0 top-0 px-3 py-2 sm:p-4 flex items-start justify-between gap-2 bg-gradient-to-b from-black/90 via-black/45 to-transparent"
+          >
+            {kiraYaklasti && kiraFlasAnahtari > 0 && (
+              <div
+                key={`kira-flas-${kiraFlasAnahtari}`}
+                data-testid="rent-warning-flash"
+                aria-hidden="true"
+                className="pointer-events-none absolute inset-0 animate-kira-uyari-flas"
+              />
+            )}
+            <div className="relative z-10 min-w-0">
               <p className="text-[11px] sm:text-xs text-[#A3ACBE] truncate">
                 {state.oyuncu.gercekAd} ·{' '}
                 <span className="text-[#EAECEF] font-semibold">{state.oyuncu.lakap}</span> ·{' '}
@@ -395,7 +613,7 @@ export const HomeHub: React.FC<HomeHubProps> = ({
               </div>
             </div>
 
-            <div className="flex items-start gap-2.5 shrink-0">
+            <div className="relative z-10 flex items-start gap-2.5 shrink-0">
               <div className="text-right">
                 <p
                   data-testid="money-display"
@@ -404,9 +622,10 @@ export const HomeHub: React.FC<HomeHubProps> = ({
                   {state.para} ₺
                 </p>
                 <p
+                  data-testid="rent-warning-badge"
                   className={`font-mono-tabular text-[11px] sm:text-xs mt-0.5 ${
-                    turetilmis.kirayaKalanGun <= 2 && turetilmis.kiraEksikTutar > 0
-                      ? 'text-[#E34A4A] font-semibold'
+                    kiraYaklasti
+                      ? 'text-[#F87171] font-bold drop-shadow-[0_0_6px_rgba(214,56,56,0.85)]'
                       : 'text-[#D99B38]'
                   }`}
                 >
@@ -436,7 +655,7 @@ export const HomeHub: React.FC<HomeHubProps> = ({
               </div>
               <div className="h-1.5 bg-[#181F30] border border-[#273147]">
                 <div
-                  className="h-full bg-[#D99B38] transition-all duration-200"
+                  className="h-full bg-[#D99B38] transition-all duration-300 ease-out"
                   style={{ width: `${Math.round((state.enerji / state.maksEnerji) * 100)}%` }}
                 />
               </div>
@@ -450,7 +669,7 @@ export const HomeHub: React.FC<HomeHubProps> = ({
               </div>
               <div className="h-1.5 bg-[#181F30] border border-[#273147]">
                 <div
-                  className={`h-full transition-all duration-200 ${
+                  className={`h-full transition-all duration-300 ease-out ${
                     state.tokluk <= 25 ? 'bg-[#E34A4A]' : 'bg-[#6CC296]'
                   }`}
                   style={{ width: `${state.tokluk}%` }}
@@ -466,7 +685,7 @@ export const HomeHub: React.FC<HomeHubProps> = ({
               </div>
               <div className="h-1.5 bg-[#181F30] border border-[#273147]">
                 <div
-                  className={`h-full transition-all duration-200 ${
+                  className={`h-full transition-all duration-300 ease-out ${
                     state.uyku <= 25 ? 'bg-[#E34A4A]' : 'bg-[#5B82B8]'
                   }`}
                   style={{ width: `${state.uyku}%` }}
@@ -482,7 +701,7 @@ export const HomeHub: React.FC<HomeHubProps> = ({
               </div>
               <div className="h-1.5 bg-[#181F30] border border-[#273147]">
                 <div
-                  className="h-full bg-[#3D8C66] transition-all duration-200"
+                  className="h-full bg-[#3D8C66] transition-all duration-300 ease-out"
                   style={{ width: `${state.moral}%` }}
                 />
               </div>
@@ -561,7 +780,7 @@ export const HomeHub: React.FC<HomeHubProps> = ({
                 </div>
                 <div className="h-2 bg-[#181F30] border border-[#273147]">
                   <div
-                    className="h-full bg-[#D99B38] transition-all duration-200"
+                    className="h-full bg-[#D99B38] transition-all duration-300 ease-out"
                     style={{ width: `${Math.round((state.enerji / state.maksEnerji) * 100)}%` }}
                   />
                 </div>
@@ -576,7 +795,7 @@ export const HomeHub: React.FC<HomeHubProps> = ({
                 </div>
                 <div className="h-2 bg-[#181F30] border border-[#273147]">
                   <div
-                    className={`h-full transition-all duration-200 ${
+                    className={`h-full transition-all duration-300 ease-out ${
                       state.tokluk <= 25 ? 'bg-[#E34A4A]' : 'bg-[#6CC296]'
                     }`}
                     style={{ width: `${state.tokluk}%` }}
@@ -593,7 +812,7 @@ export const HomeHub: React.FC<HomeHubProps> = ({
                 </div>
                 <div className="h-2 bg-[#181F30] border border-[#273147]">
                   <div
-                    className={`h-full transition-all duration-200 ${
+                    className={`h-full transition-all duration-300 ease-out ${
                       state.uyku <= 25 ? 'bg-[#E34A4A]' : 'bg-[#5B82B8]'
                     }`}
                     style={{ width: `${state.uyku}%` }}
@@ -610,7 +829,7 @@ export const HomeHub: React.FC<HomeHubProps> = ({
                 </div>
                 <div className="h-2 bg-[#181F30] border border-[#273147]">
                   <div
-                    className="h-full bg-[#3D8C66] transition-all duration-200"
+                    className="h-full bg-[#3D8C66] transition-all duration-300 ease-out"
                     style={{ width: `${state.moral}%` }}
                   />
                 </div>
@@ -633,7 +852,7 @@ export const HomeHub: React.FC<HomeHubProps> = ({
                     </div>
                     <div className="h-1 bg-[#0B0E17] mt-1.5">
                       <div
-                        className="h-full bg-[#D63838]"
+                        className="h-full bg-[#D63838] transition-all duration-300 ease-out"
                         style={{ width: `${durum.ilerleme}%` }}
                       />
                     </div>
@@ -953,7 +1172,7 @@ export const HomeHub: React.FC<HomeHubProps> = ({
                     <button
                       type="button"
                       data-testid="sleep-btn"
-                      onClick={onUyuVeGunuBitir}
+                      onClick={uyuTetikle}
                       className="min-h-[52px] px-4 py-3 bg-[#D63838] hover:bg-[#E34A4A] text-white text-left flex items-center justify-between gap-3 transition-colors cursor-pointer"
                     >
                       <div>
@@ -1997,6 +2216,32 @@ export const HomeHub: React.FC<HomeHubProps> = ({
           onSecenekSec={onOlaySecenegi}
         />
       ) : null}
+
+      {/* Mekanlar arası (400ms) ve gün sonu uyku ("Yeni Gün") geçiş perdesi */}
+      <div
+        ref={perdeRef}
+        data-testid="screen-transition-overlay"
+        data-phase={gecisDurumu.gorunur ? gecisDurumu.tur : 'bosta'}
+        aria-hidden={!gecisDurumu.gorunur}
+        style={{ opacity: 0 }}
+        className={`fixed inset-0 z-50 bg-[#05070C] flex items-center justify-center will-change-[opacity] ${
+          gecisDurumu.gorunur ? 'pointer-events-auto' : 'pointer-events-none'
+        }`}
+      >
+        {gecisDurumu.yeniGunBaslik && (
+          <div
+            data-testid="new-day-banner"
+            className="text-center px-6 py-4 border-y border-[#D99B38]/40 bg-[#0B0E17]/80"
+          >
+            <p className="font-display text-3xl sm:text-5xl font-extrabold tracking-widest uppercase text-[#EAECEF]">
+              Yeni Gün
+            </p>
+            <p className="font-mono-tabular text-xs sm:text-sm text-[#D99B38] mt-1 tracking-wider uppercase">
+              {gecisDurumu.yeniGunBaslik.replace('Yeni Gün · ', '')}
+            </p>
+          </div>
+        )}
+      </div>
     </div>
   );
 };

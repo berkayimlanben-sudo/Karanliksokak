@@ -577,10 +577,13 @@ let istenenRuhHali: MuzikRuhHali | null = null;
 let muzikIstekSeq = 0;
 let sekmeArkaPlanda = false;
 let visibilityBaglandi = false;
+let visibilityHandler: (() => void) | null = null;
 let beforeUnloadBaglandi = false;
 let ilkEtkilesimBaglandi = false;
 let kullaniciEtkilesimiAlindi = false;
 let gizlemeSuspendTimer: ReturnType<typeof setTimeout> | null = null;
+let suspendBekleniyor = false;
+let sonEskiMuzik: AudioBufferSourceNode | null = null;
 const sesKilidiDinleyicileri = new Set<(bekliyor: boolean) => void>();
 
 function clamp01(deger: number): number {
@@ -765,7 +768,31 @@ function visibilityDinleyiciBagla(): void {
     return;
   }
   visibilityBaglandi = true;
-  document.addEventListener('visibilitychange', () => {
+
+  const fadeInUygula = () => {
+    const aktifCtx = paylasilanCtx;
+    if (!aktifCtx || sekmeArkaPlanda) return;
+    const hedef = hedefMuzikBusSeviyesi(ayarlariYukle());
+    if (muzikBusGainNode) {
+      try {
+        const simdi = aktifCtx.currentTime;
+        muzikBusGainNode.gain.cancelScheduledValues?.(simdi);
+        muzikBusGainNode.gain.setValueAtTime(0.0001, simdi);
+        muzikBusGainNode.gain.linearRampToValueAtTime(
+          Math.max(0.0001, hedef),
+          simdi + VISIBILITY_FADE_IN_SN
+        );
+      } catch {
+        muzikBusGainNode.gain.value = hedef;
+      }
+    }
+    if (istenenRuhHali && !aktifMuzik) {
+      void muzikBaslatVeyaGecisYap(istenenRuhHali);
+    }
+    sesKilidiDurumuBildir();
+  };
+
+  visibilityHandler = () => {
     const gizlendi = document.visibilityState === 'hidden';
     sekmeArkaPlanda = gizlendi;
 
@@ -791,11 +818,35 @@ function visibilityDinleyiciBagla(): void {
         }
       }
 
-      if (ctx.state === 'running' && typeof ctx.suspend === 'function') {
+      if (ctx.state === 'running' && typeof ctx.suspend === 'function' && !suspendBekleniyor) {
         gizlemeSuspendTimer = setTimeout(() => {
           gizlemeSuspendTimer = null;
-          if (sekmeArkaPlanda && paylasilanCtx && paylasilanCtx.state === 'running') {
-            paylasilanCtx.suspend().catch(() => {});
+          if (
+            sekmeArkaPlanda &&
+            paylasilanCtx &&
+            paylasilanCtx.state === 'running' &&
+            typeof paylasilanCtx.suspend === 'function'
+          ) {
+            suspendBekleniyor = true;
+            void paylasilanCtx
+              .suspend()
+              .catch(() => {})
+              .finally(() => {
+                suspendBekleniyor = false;
+                if (
+                  !sekmeArkaPlanda &&
+                  paylasilanCtx &&
+                  paylasilanCtx.state === 'suspended' &&
+                  typeof paylasilanCtx.resume === 'function'
+                ) {
+                  void paylasilanCtx
+                    .resume()
+                    .then(fadeInUygula)
+                    .catch(() => {
+                      sesKilidiDurumuBildir();
+                    });
+                }
+              });
           }
         }, Math.round(VISIBILITY_FADE_OUT_SN * 1000) + 15);
       }
@@ -810,40 +861,19 @@ function visibilityDinleyiciBagla(): void {
     const ctx = paylasilanCtx;
     if (!ctx) return;
 
-    const fadeInUygula = () => {
-      const aktifCtx = paylasilanCtx;
-      if (!aktifCtx || sekmeArkaPlanda) return;
-      const hedef = hedefMuzikBusSeviyesi(ayarlariYukle());
-      if (muzikBusGainNode) {
-        try {
-          const simdi = aktifCtx.currentTime;
-          muzikBusGainNode.gain.cancelScheduledValues?.(simdi);
-          muzikBusGainNode.gain.setValueAtTime(0.0001, simdi);
-          muzikBusGainNode.gain.linearRampToValueAtTime(
-            Math.max(0.0001, hedef),
-            simdi + VISIBILITY_FADE_IN_SN
-          );
-        } catch {
-          muzikBusGainNode.gain.value = hedef;
-        }
-      }
-      if (istenenRuhHali && !aktifMuzik) {
-        void muzikBaslatVeyaGecisYap(istenenRuhHali);
-      }
-      sesKilidiDurumuBildir();
-    };
-
-    if (ctx.state === 'suspended' && typeof ctx.resume === 'function') {
+    if (!suspendBekleniyor && ctx.state === 'suspended' && typeof ctx.resume === 'function') {
       ctx
         .resume()
         .then(fadeInUygula)
         .catch(() => {
           sesKilidiDurumuBildir();
         });
-    } else {
+    } else if (!suspendBekleniyor) {
       fadeInUygula();
     }
-  });
+  };
+
+  document.addEventListener('visibilitychange', visibilityHandler);
 }
 
 function sesSisteminiKapat(): void {
@@ -851,12 +881,40 @@ function sesSisteminiKapat(): void {
     clearTimeout(gizlemeSuspendTimer);
     gizlemeSuspendTimer = null;
   }
+  suspendBekleniyor = false;
   muzikIstekSeq += 1;
+
+  if (
+    visibilityHandler &&
+    typeof document !== 'undefined' &&
+    typeof document.removeEventListener === 'function'
+  ) {
+    document.removeEventListener('visibilitychange', visibilityHandler);
+    visibilityHandler = null;
+    visibilityBaglandi = false;
+  }
+  if (
+    beforeUnloadBaglandi &&
+    typeof window !== 'undefined' &&
+    typeof window.removeEventListener === 'function'
+  ) {
+    window.removeEventListener('beforeunload', sesSisteminiKapat);
+    beforeUnloadBaglandi = false;
+  }
 
   for (const kayit of aktifSfxler) {
     kayit.durdur();
   }
   aktifSfxler = [];
+
+  if (sonEskiMuzik) {
+    try {
+      sonEskiMuzik.stop();
+    } catch {
+      // Yoksay
+    }
+    sonEskiMuzik = null;
+  }
 
   if (aktifMuzik) {
     try {
@@ -1433,12 +1491,21 @@ async function muzikBaslatVeyaGecisYap(ruhHali: MuzikRuhHali): Promise<void> {
 
     const simdi = paylasilanCtx.currentTime;
     const eski = aktifMuzik;
+    if (sonEskiMuzik && sonEskiMuzik !== eski?.source) {
+      try {
+        sonEskiMuzik.stop(simdi);
+      } catch {
+        // Yoksay
+      }
+      sonEskiMuzik = null;
+    }
     if (eski) {
       try {
         eski.gain.gain.cancelScheduledValues?.(simdi);
         eski.gain.gain.setValueAtTime(Math.max(0.0001, eski.gain.gain.value), simdi);
         eski.gain.gain.linearRampToValueAtTime(0.0001, simdi + MUZIK_CROSSFADE_SN);
         eski.source.stop(simdi + MUZIK_CROSSFADE_SN + 0.05);
+        sonEskiMuzik = eski.source;
       } catch {
         // Eski kaynağı sessizce kapat
       }

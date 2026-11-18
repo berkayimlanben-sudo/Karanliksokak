@@ -45,6 +45,7 @@ export interface AudioDebugPanelProps {
   onKiraGununeAtla?: () => void;
   onZorlaMacBaslat?: (rakip: RakipTanimi) => void;
   onDengeDegisti?: () => void;
+  onHataTesti?: () => void;
 }
 
 function sayiSinirla(deger: number, min: number, maks: number): number {
@@ -66,6 +67,7 @@ export const AudioDebugPanel: React.FC<AudioDebugPanelProps> = ({
   onKiraGununeAtla,
   onZorlaMacBaslat,
   onDengeDegisti,
+  onHataTesti,
 }) => {
   const search = typeof window !== 'undefined' ? window.location.search : '';
   const queryDebugAcik = useMemo(() => {
@@ -215,7 +217,7 @@ export const AudioDebugPanel: React.FC<AudioDebugPanelProps> = ({
   };
 
   return (
-    <div className="pointer-events-auto fixed bottom-3 right-3 z-40">
+    <div className="pointer-events-auto fixed bottom-3 right-3 z-[60]">
       {!acik ? (
         <button
           type="button"
@@ -524,6 +526,17 @@ export const AudioDebugPanel: React.FC<AudioDebugPanelProps> = ({
                         Seçili Rakiple Maçı Başlat (Zorla)
                       </button>
                     </div>
+
+                    {onHataTesti && (
+                      <button
+                        type="button"
+                        data-testid="debug-trigger-crash"
+                        onClick={onHataTesti}
+                        className="w-full py-1.5 text-[10px] font-semibold border border-[#3A4766] bg-[#141118] hover:border-[#E34A4A] text-[#8B95AB] hover:text-[#F2A6A6] cursor-pointer"
+                      >
+                        ErrorBoundary Testi (Bileşen Çökert)
+                      </button>
+                    )}
                   </>
                 )}
               </>

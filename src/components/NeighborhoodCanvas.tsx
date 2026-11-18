@@ -129,10 +129,11 @@ export const NeighborhoodCanvas: React.FC<NeighborhoodCanvasProps> = ({
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    const reducedMotion =
-      typeof window !== 'undefined' &&
-      window.matchMedia &&
-      window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const mediaQuery =
+      typeof window !== 'undefined' && typeof window.matchMedia === 'function'
+        ? window.matchMedia('(prefers-reduced-motion: reduce)')
+        : null;
+    let reducedMotion = Boolean(mediaQuery?.matches);
 
     const pixelCanvas = document.createElement('canvas');
     const pCtx = pixelCanvas.getContext('2d');
@@ -750,16 +751,30 @@ export const NeighborhoodCanvas: React.FC<NeighborhoodCanvasProps> = ({
       }
     };
 
-    if (reducedMotion) {
-      tekCizimRef.current = () => {
-        rafId = requestAnimationFrame(ciz);
-      };
-    }
+    tekCizimRef.current = () => {
+      if (!reducedMotion) return;
+      if (rafId) {
+        cancelAnimationFrame(rafId);
+      }
+      rafId = requestAnimationFrame(ciz);
+    };
+
+    const motionChangeDinle = (ev: MediaQueryListEvent) => {
+      reducedMotion = ev.matches;
+      if (rafId) {
+        cancelAnimationFrame(rafId);
+        rafId = 0;
+      }
+      stateRef.current.yenidenCiz = true;
+      rafId = requestAnimationFrame(ciz);
+    };
+    mediaQuery?.addEventListener?.('change', motionChangeDinle);
 
     rafId = requestAnimationFrame(ciz);
 
     return () => {
       tekCizimRef.current = null;
+      mediaQuery?.removeEventListener?.('change', motionChangeDinle);
       cancelAnimationFrame(rafId);
       ro.disconnect();
     };

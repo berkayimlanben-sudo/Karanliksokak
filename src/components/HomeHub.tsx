@@ -40,6 +40,7 @@ import {
   RingTavri,
   saatMetni,
 } from '../game/engine';
+import { DENGE } from '../game/balance';
 import { playSfx } from '../game/sound';
 import {
   efektKatmaniniAyir,
@@ -67,11 +68,13 @@ interface HomeHubProps {
   onAileEtkiles: (uyeId: 'anne_emine' | 'kardes_elif') => void;
   onEvEsyasiAl: (esyaId: string) => void;
   onEvYukselt: () => void;
+  onKiraBorcuOde: () => void;
   onUyuVeGunuBitir: () => void;
   onOlaySecenegi: (secenekId: string) => void;
   onHocaDersiAl: (dersId: string) => void;
   onKomsuEtkiles: (komsuId: string) => void;
   onKomsuSecenegi: (secenekId: string) => void;
+  onKomsuOlayiniKapat: () => void;
   onYetenekAc: (yetenekId: string) => void;
   onKomsuDayanisma: () => void;
   onRingTavriDegistir: (tavir: RingTavri) => void;
@@ -112,11 +115,13 @@ export const HomeHub: React.FC<HomeHubProps> = ({
   onAileEtkiles,
   onEvEsyasiAl,
   onEvYukselt,
+  onKiraBorcuOde,
   onUyuVeGunuBitir,
   onOlaySecenegi,
   onHocaDersiAl,
   onKomsuEtkiles,
   onKomsuSecenegi,
+  onKomsuOlayiniKapat,
   onYetenekAc,
   onKomsuDayanisma,
   onRingTavriDegistir,
@@ -133,10 +138,12 @@ export const HomeHub: React.FC<HomeHubProps> = ({
     tur: 'mekan' | 'uyku';
     gorunur: boolean;
     yeniGunBaslik: string | null;
+    soluyor?: boolean;
   }>({
     tur: 'mekan',
     gorunur: false,
     yeniGunBaslik: null,
+    soluyor: false,
   });
   const [kiraFlasAnahtari, setKiraFlasAnahtari] = useState(0);
   const sahneKonteynerRef = useRef<HTMLDivElement | null>(null);
@@ -285,7 +292,7 @@ export const HomeHub: React.FC<HomeHubProps> = ({
       tanim &&
       !aktifOlayEngeli &&
       state.enerji >= tanim.enerjiMaliyeti &&
-      state.tokluk >= 5 &&
+      state.tokluk >= DENGE.antrenman.minToklukEsigi &&
       girisYeterli
     ) {
       setSonAksiyonTuru(statId);
@@ -306,7 +313,7 @@ export const HomeHub: React.FC<HomeHubProps> = ({
   };
 
   const golgeBoksuTetikle = () => {
-    if (!aktifOlayEngeli && state.enerji >= 14) {
+    if (!aktifOlayEngeli && state.enerji >= DENGE.antrenman.sokakGolgeBoksuEnerji) {
       setSonAksiyonTuru('ceviklik');
       setAksiyonDarbesi((v) => v + 1);
       playSfx('menu_tik');
@@ -335,7 +342,7 @@ export const HomeHub: React.FC<HomeHubProps> = ({
     }
 
     gecisAktifRef.current = true;
-    setGecisDurumu({ tur: 'mekan', gorunur: true, yeniGunBaslik: null });
+    setGecisDurumu({ tur: 'mekan', gorunur: true, yeniGunBaslik: null, soluyor: false });
     const baslangic = performance.now();
     let mekanDegisti = false;
 
@@ -349,6 +356,7 @@ export const HomeHub: React.FC<HomeHubProps> = ({
           mekanDegisti = true;
           setSagGorunum('mekan');
           onMekanaGit(hedefMekan);
+          setGecisDurumu({ tur: 'mekan', gorunur: true, yeniGunBaslik: null, soluyor: true });
         }
         opaklik = gecen < 400 ? 1 - (gecen - 200) / 200 : 0;
       }
@@ -362,7 +370,7 @@ export const HomeHub: React.FC<HomeHubProps> = ({
       } else {
         gecisAktifRef.current = false;
         gecisRafRef.current = 0;
-        setGecisDurumu({ tur: 'mekan', gorunur: false, yeniGunBaslik: null });
+        setGecisDurumu({ tur: 'mekan', gorunur: false, yeniGunBaslik: null, soluyor: false });
       }
     };
 
@@ -382,7 +390,7 @@ export const HomeHub: React.FC<HomeHubProps> = ({
 
     gecisAktifRef.current = true;
     const hedefGun = state.gun + 1;
-    setGecisDurumu({ tur: 'uyku', gorunur: true, yeniGunBaslik: null });
+    setGecisDurumu({ tur: 'uyku', gorunur: true, yeniGunBaslik: null, soluyor: false });
     const baslangic = performance.now();
     let gunIlerletildi = false;
     let baslikGosterildi = false;
@@ -406,12 +414,13 @@ export const HomeHub: React.FC<HomeHubProps> = ({
             tur: 'uyku',
             gorunur: true,
             yeniGunBaslik: `Yeni Gün · Gün ${hedefGun}`,
+            soluyor: false,
           });
         }
       } else if (gecen < 1400) {
         if (!baslikGizlendi) {
           baslikGizlendi = true;
-          setGecisDurumu({ tur: 'uyku', gorunur: true, yeniGunBaslik: null });
+          setGecisDurumu({ tur: 'uyku', gorunur: true, yeniGunBaslik: null, soluyor: true });
         }
         opaklik = Math.max(0, 1 - (gecen - 1000) / 400);
       } else {
@@ -427,7 +436,7 @@ export const HomeHub: React.FC<HomeHubProps> = ({
       } else {
         gecisAktifRef.current = false;
         gecisRafRef.current = 0;
-        setGecisDurumu({ tur: 'mekan', gorunur: false, yeniGunBaslik: null });
+        setGecisDurumu({ tur: 'mekan', gorunur: false, yeniGunBaslik: null, soluyor: false });
       }
     };
 
@@ -440,7 +449,9 @@ export const HomeHub: React.FC<HomeHubProps> = ({
   };
 
   const acilCorbaMusait =
-    state.para < 35 && state.buzdolabiStok === 0 && state.tokluk < 50;
+    state.para < DENGE.ekonomiVeYasam.acilCorbaMaxPara &&
+    state.buzdolabiStok === 0 &&
+    state.tokluk < DENGE.ekonomiVeYasam.acilCorbaMaxTokluk;
 
   const komsularBolumuRender = () => {
     if (mekanKomsuListesi.length === 0) return null;
@@ -559,7 +570,10 @@ export const HomeHub: React.FC<HomeHubProps> = ({
   return (
     <div className="h-[100dvh] overflow-hidden lg:h-auto lg:min-h-screen lg:overflow-visible w-full bg-[#0B0E17] text-[#EAECEF] flex flex-col lg:flex-row">
       {/* SOL SÜTUN (Masaüstü) / SABİT ÜST BÖLÜM (Mobil): Pixel Art Sahne, İhtiyaçlar ve Mekan Çubuğu */}
-      <section className="shrink-0 z-20 w-full lg:w-[46%] lg:sticky lg:top-0 lg:h-screen flex flex-col border-b lg:border-b-0 lg:border-r border-[#273147] bg-[#0B0E17]">
+      <section
+        inert={aktifOlayEngeli || undefined}
+        className="shrink-0 z-20 w-full lg:w-[46%] lg:sticky lg:top-0 lg:h-screen flex flex-col border-b lg:border-b-0 lg:border-r border-[#273147] bg-[#0B0E17]"
+      >
         {/* Pixel Art Sahne */}
         <div
           ref={sahneKonteynerRef}
@@ -922,6 +936,7 @@ export const HomeHub: React.FC<HomeHubProps> = ({
       {/* SAĞ SÜTUN: Masaüstü Mekan Çubuğu ve Aktif Mekan Aktiviteleri */}
       <section
         ref={sagPanelRef}
+        inert={aktifOlayEngeli || undefined}
         className="flex-1 min-h-0 overflow-y-auto lg:overflow-visible flex flex-col min-w-0"
       >
         {/* Masaüstü Mekan Navigasyonu + Yetenekler + Hamleler */}
@@ -1177,10 +1192,14 @@ export const HomeHub: React.FC<HomeHubProps> = ({
                     >
                       <div>
                         <p className="font-display text-base sm:text-lg font-bold tracking-wide">
-                          Yatakta Uyu ve Günü Bitir
+                          {state.sokaktaKaliyor
+                            ? 'Dışarıda Gecele ve Günü Bitir'
+                            : 'Yatakta Uyu ve Günü Bitir'}
                         </p>
                         <p className="text-[11px] text-white/85">
-                          08:00’a uyan · +{mevcutEv.gunlukEnerjiToparlanma} EN · Ücretsiz
+                          {state.sokaktaKaliyor
+                            ? `08:00’a uyan · +${DENGE.ekonomiVeYasam.sokaktaEnerjiToparlanma} EN (Kapı Kilitli)`
+                            : `08:00’a uyan · +${mevcutEv.gunlukEnerjiToparlanma} EN · Ücretsiz`}
                         </p>
                       </div>
                       <Moon className="w-5 h-5 shrink-0" />
@@ -1210,6 +1229,39 @@ export const HomeHub: React.FC<HomeHubProps> = ({
                       <Utensils className="w-5 h-5 shrink-0" />
                     </button>
                   </div>
+
+                  {/* Kapı Kilitli (Sokakta Kalma) Uyarısı */}
+                  {state.sokaktaKaliyor && (
+                    <div
+                      data-testid="eviction-banner"
+                      className="border border-[#E34A4A]/60 bg-[#261216] p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5"
+                    >
+                      <div>
+                        <p className="text-xs font-semibold text-[#E34A4A]">
+                          Ev Sahibi Kapıyı Kilitledi
+                        </p>
+                        <p className="text-xs text-[#C8CFDC] mt-0.5">
+                          Üst üste kira ödenemediği için gece toparlanman düşük ({DENGE.ekonomiVeYasam.sokaktaEnerjiToparlanma} EN). {mevcutEv.haftalikKira} ₺ denkleştirip kilidi açtırabilirsin.
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        data-testid="pay-rent-debt-btn"
+                        disabled={state.para < mevcutEv.haftalikKira}
+                        onClick={() => {
+                          playSfx('menu_tik');
+                          onKiraBorcuOde();
+                        }}
+                        className={`min-h-[42px] px-4 py-2 text-xs font-semibold whitespace-nowrap shrink-0 transition-colors ${
+                          state.para >= mevcutEv.haftalikKira
+                            ? 'bg-[#D63838] hover:bg-[#E34A4A] text-white cursor-pointer'
+                            : 'border border-[#3A4766] bg-[#121724] text-[#5B657A] cursor-not-allowed'
+                        }`}
+                      >
+                        Kira Öde ve Eve Dön ({mevcutEv.haftalikKira} ₺)
+                      </button>
+                    </div>
+                  )}
 
                   {/* Anti-Ölüm Sarmalı: Acil Ev Çorbası */}
                   {acilCorbaMusait && (
@@ -1246,9 +1298,12 @@ export const HomeHub: React.FC<HomeHubProps> = ({
                       </div>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                         {(['guc', 'ceviklik'] as const).map((statId) => {
-                          const stat = STAT_TANIMLARI.find((s) => s.id === statId)!;
+                          const stat = STAT_TANIMLARI.find((s) => s.id === statId);
+                          if (!stat) return null;
                           const durum = state.statlar[statId];
-                          const yeterli = state.enerji >= stat.enerjiMaliyeti && state.tokluk >= 5;
+                          const yeterli =
+                            state.enerji >= stat.enerjiMaliyeti &&
+                            state.tokluk >= DENGE.antrenman.minToklukEsigi;
                           return (
                             <button
                               key={statId}
@@ -1538,7 +1593,7 @@ export const HomeHub: React.FC<HomeHubProps> = ({
                         : SAAT_SABITLERI.salonGunlukGirisUcreti;
                       const musait =
                         state.enerji >= stat.enerjiMaliyeti &&
-                        state.tokluk >= 5 &&
+                        state.tokluk >= DENGE.antrenman.minToklukEsigi &&
                         state.para >= girisUcreti;
 
                       return (
@@ -1950,14 +2005,14 @@ export const HomeHub: React.FC<HomeHubProps> = ({
                     <button
                       type="button"
                       onClick={golgeBoksuTetikle}
-                      disabled={state.enerji < 14}
+                      disabled={state.enerji < DENGE.antrenman.sokakGolgeBoksuEnerji}
                       className={`min-h-[44px] w-full px-4 py-2 text-xs font-semibold border transition-colors ${
-                        state.enerji >= 14
+                        state.enerji >= DENGE.antrenman.sokakGolgeBoksuEnerji
                           ? 'border-[#3A4766] bg-[#181F30] hover:border-[#D63838] text-[#EAECEF] cursor-pointer'
                           : 'border-[#273147] bg-[#0D1019] text-[#5B657A] cursor-not-allowed'
                       }`}
                     >
-                      Gölge Boksu Yap (45 dk · -14 EN · -8 Tokluk · +Çeviklik)
+                      Gölge Boksu Yap ({DENGE.zaman.sokakGolgeBoksuDakika} dk · -{DENGE.antrenman.sokakGolgeBoksuEnerji} EN · -{DENGE.antrenman.sokakGolgeBoksuTokluk} Tokluk · +Çeviklik)
                     </button>
                   </div>
 
@@ -2145,7 +2200,10 @@ export const HomeHub: React.FC<HomeHubProps> = ({
               <h3 className="text-xs font-semibold text-[#8B95AB]">Son Kayıtlar</h3>
               <ul className="space-y-1 text-xs text-[#B3BCCB]">
                 {state.gecmis.slice(0, 4).map((kayit, index) => (
-                  <li key={index} className="flex items-baseline gap-2">
+                  <li
+                    key={`${kayit.gun}-${kayit.saatMetni ?? ''}-${state.gecmis.length - index}`}
+                    className="flex items-baseline gap-2"
+                  >
                     <span className="font-mono-tabular text-[#8B95AB] shrink-0">
                       G{kayit.gun} {kayit.saatMetni ?? ''}:
                     </span>
@@ -2208,6 +2266,7 @@ export const HomeHub: React.FC<HomeHubProps> = ({
           olay={state.aktifKomsuOlayi}
           state={state}
           onSecenekSec={onKomsuSecenegi}
+          onKapat={onKomsuOlayiniKapat}
         />
       ) : state.aktifOlay ? (
         <EventModal
@@ -2224,8 +2283,10 @@ export const HomeHub: React.FC<HomeHubProps> = ({
         data-phase={gecisDurumu.gorunur ? gecisDurumu.tur : 'bosta'}
         aria-hidden={!gecisDurumu.gorunur}
         style={{ opacity: 0 }}
-        className={`fixed inset-0 z-50 bg-[#05070C] flex items-center justify-center will-change-[opacity] ${
-          gecisDurumu.gorunur ? 'pointer-events-auto' : 'pointer-events-none'
+        className={`fixed inset-0 z-[60] bg-[#05070C] flex items-center justify-center will-change-[opacity] ${
+          gecisDurumu.gorunur && !gecisDurumu.soluyor
+            ? 'pointer-events-auto'
+            : 'pointer-events-none'
         }`}
       >
         {gecisDurumu.yeniGunBaslik && (

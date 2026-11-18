@@ -157,6 +157,9 @@ export interface DengeConfig {
     kiraDusmeMoralCezasi: number;
     kiraIkinciUyariMoralCezasi: number;
     kiraIkinciUyariItibarKaybi: number;
+    sokaktaEnerjiToparlanma: number;
+    sokaktaYorgunlukAzaltma: number;
+    sokaktaMoralCezasi: number;
     evEsyasiMoralBonus: number;
     evYukseltMoralBonus: number;
     arbedeEkEnerjiKaybi: number;
@@ -172,6 +175,11 @@ export interface DengeConfig {
     komsuDayanismaPara: number;
     komsuDayanismaStok: number;
     komsuDayanismaMoral: number;
+    gecmisLimiti: number;
+    uykuDayaniklilikReferans: number;
+    uykuDayaniklilikCarpan: number;
+    hocaMinUykuKaybi: number;
+    hocaEnerjiUykuCarpani: number;
   };
   verimVeEsikler: {
     moralCarpaniTaban: number;
@@ -210,6 +218,10 @@ export interface DengeConfig {
     olayTetiklemeGunFarki: number;
     olayTetiklemeOlasilik: number;
     ahlakiOlayOncelikOlasilik: number;
+    aileSicakEsik: number;
+    aileGerginEsik: number;
+    aileKaranlikSecimEsik: number;
+    aileKorkuFarkEsik: number;
   };
   dovus: {
     macSureDakika: number;
@@ -255,6 +267,49 @@ export interface DengeConfig {
     kazanmaStatPuan: number;
     berabereStatPuan: number;
     kaybetmeStatPuan: number;
+    galibiyetMinSaygiKorku: number;
+    dengeliSaygiOran: number;
+    dengeliKorkuOran: number;
+    kazanmaYetenekPuani: number;
+    ilkGalibiyetBonusYp: number;
+    aksiyonSaldiriMs: number;
+    aksiyonBlokMs: number;
+    blokStandartSureMs: number;
+    blokCelikGardSureMs: number;
+    blokMukemmelEkSureMs: number;
+    mukemmelBlokPencereMs: number;
+    mukemmelBlokEkStamina: number;
+    kacinmaGeriCekilSureMs: number;
+    kacinmaEgilSureMs: number;
+    kacinmaHayaletSureMs: number;
+    kacinmaMukemmelEkSureMs: number;
+    karsiPencereStandartMs: number;
+    karsiPencereMukemmelMs: number;
+    kacinmaTabanSans: number;
+    kacinmaRefleksCarpan: number;
+    kacinmaBonusCarpan: number;
+    kacinmaMinSans: number;
+    kacinmaMaxSans: number;
+    isabetCeviklikCarpan: number;
+    isabetRefleksCarpan: number;
+    isabetKarsiBonusu: number;
+    isabetDusukStaminaCezasi: number;
+    isabetMinSans: number;
+    isabetMaxSans: number;
+    blokHasarCarpani: number;
+    blokMinHasarCarpani: number;
+    mukemmelBlokHasarCarpani: number;
+    mukemmelBlokMinHasarCarpani: number;
+    minHasarNormal: number;
+    minHasarBlok: number;
+    minHasarMukemmelBlok: number;
+    hitstopMukemmelMs: number;
+    hitstopAgirMs: number;
+    hitstopKombo2Ms: number;
+    hitstopKombo3Ms: number;
+    bitkinStaminaEsigi: number;
+    oyuncuBitkinBeklemeMs: number;
+    rakipBitkinBeklemeMs: number;
     hamleler: Record<string, HamleDenge>;
     rakipler: Record<string, RakipDenge>;
   };
@@ -352,14 +407,14 @@ export const VARSAYILAN_DENGE: DengeConfig = {
       moralEtkisi: 6,
     },
     market_mutfak_poseti: {
-      fiyat: 95,
+      fiyat: 115,
       sureDakika: 10,
       toklukArtisi: 0,
       enerjiArtisi: 0,
       moralEtkisi: 2,
     },
     market_haftalik_erzak: {
-      fiyat: 175,
+      fiyat: 210,
       sureDakika: 10,
       toklukArtisi: 0,
       enerjiArtisi: 0,
@@ -469,7 +524,7 @@ export const VARSAYILAN_DENGE: DengeConfig = {
     },
   },
   antrenman: {
-    salonGunlukGirisUcreti: 20,
+    salonGunlukGirisUcreti: 25,
     minToklukEsigi: 5,
     evTorbaVerimCarpani: 0.85,
     agirlikSetiBonusYuzde: 20,
@@ -492,6 +547,9 @@ export const VARSAYILAN_DENGE: DengeConfig = {
     kiraDusmeMoralCezasi: 18,
     kiraIkinciUyariMoralCezasi: 20,
     kiraIkinciUyariItibarKaybi: 1,
+    sokaktaEnerjiToparlanma: 46,
+    sokaktaYorgunlukAzaltma: 16,
+    sokaktaMoralCezasi: 4,
     evEsyasiMoralBonus: 4,
     evYukseltMoralBonus: 12,
     arbedeEkEnerjiKaybi: 14,
@@ -507,6 +565,11 @@ export const VARSAYILAN_DENGE: DengeConfig = {
     komsuDayanismaPara: 35,
     komsuDayanismaStok: 1,
     komsuDayanismaMoral: 5,
+    gecmisLimiti: 18,
+    uykuDayaniklilikReferans: 5,
+    uykuDayaniklilikCarpan: 2,
+    hocaMinUykuKaybi: 6,
+    hocaEnerjiUykuCarpani: 0.5,
   },
   verimVeEsikler: {
     moralCarpaniTaban: 0.8,
@@ -545,6 +608,10 @@ export const VARSAYILAN_DENGE: DengeConfig = {
     olayTetiklemeGunFarki: 2,
     olayTetiklemeOlasilik: 0.55,
     ahlakiOlayOncelikOlasilik: 0.55,
+    aileSicakEsik: 70,
+    aileGerginEsik: 48,
+    aileKaranlikSecimEsik: 2,
+    aileKorkuFarkEsik: 10,
   },
   dovus: {
     macSureDakika: 45,
@@ -559,8 +626,8 @@ export const VARSAYILAN_DENGE: DengeConfig = {
     komboPenceresiMs: 3500,
     kombo2xCarpan: 1.25,
     kombo3xCarpan: 1.35,
-    gucHasarTaban: 0.72,
-    gucHasarCarpan: 0.11,
+    gucHasarTaban: 0.44,
+    gucHasarCarpan: 0.065,
     karsiSaldiriStandartCarpan: 1.38,
     karsiSaldiriMukemmelCarpan: 1.65,
     staminaRegenTaban: 8.5,
@@ -578,7 +645,7 @@ export const VARSAYILAN_DENGE: DengeConfig = {
     rakipIlkSayacMsCekinme1: 1450,
     rakipIlkSayacMsCekinme2: 1750,
     rakipBaslangicMinStamina: 10,
-    mukemmelBlokStaminaOdulu: 12,
+    mukemmelBlokStaminaOdulu: 3,
     agirVurusHasarEsigi: 20,
     rastgeleSapmaTaban: 0.9,
     rastgeleSapmaAralik: 0.2,
@@ -590,6 +657,49 @@ export const VARSAYILAN_DENGE: DengeConfig = {
     kazanmaStatPuan: 16,
     berabereStatPuan: 15,
     kaybetmeStatPuan: 15,
+    galibiyetMinSaygiKorku: 2,
+    dengeliSaygiOran: 0.6,
+    dengeliKorkuOran: 0.5,
+    kazanmaYetenekPuani: 1,
+    ilkGalibiyetBonusYp: 1,
+    aksiyonSaldiriMs: 360,
+    aksiyonBlokMs: 650,
+    blokStandartSureMs: 900,
+    blokCelikGardSureMs: 1050,
+    blokMukemmelEkSureMs: 50,
+    mukemmelBlokPencereMs: 380,
+    mukemmelBlokEkStamina: 3,
+    kacinmaGeriCekilSureMs: 720,
+    kacinmaEgilSureMs: 800,
+    kacinmaHayaletSureMs: 860,
+    kacinmaMukemmelEkSureMs: 50,
+    karsiPencereStandartMs: 1800,
+    karsiPencereMukemmelMs: 2050,
+    kacinmaTabanSans: 46,
+    kacinmaRefleksCarpan: 2.5,
+    kacinmaBonusCarpan: 0.35,
+    kacinmaMinSans: 40,
+    kacinmaMaxSans: 96,
+    isabetCeviklikCarpan: 1.9,
+    isabetRefleksCarpan: 1.5,
+    isabetKarsiBonusu: 18,
+    isabetDusukStaminaCezasi: 12,
+    isabetMinSans: 30,
+    isabetMaxSans: 98,
+    blokHasarCarpani: 0.35,
+    blokMinHasarCarpani: 0.15,
+    mukemmelBlokHasarCarpani: 0.15,
+    mukemmelBlokMinHasarCarpani: 0.08,
+    minHasarNormal: 4,
+    minHasarBlok: 2,
+    minHasarMukemmelBlok: 1,
+    hitstopMukemmelMs: 80,
+    hitstopAgirMs: 85,
+    hitstopKombo2Ms: 85,
+    hitstopKombo3Ms: 95,
+    bitkinStaminaEsigi: 8,
+    oyuncuBitkinBeklemeMs: 750,
+    rakipBitkinBeklemeMs: 800,
     hamleler: {
       duz_yumruk: { temelHasar: 10, staminaMaliyeti: 10, isabetSansi: 84, beklemeSuresiMs: 850 },
       sert_yumruk: { temelHasar: 22, staminaMaliyeti: 22, isabetSansi: 68, beklemeSuresiMs: 1850 },
@@ -600,7 +710,7 @@ export const VARSAYILAN_DENGE: DengeConfig = {
         staminaMaliyeti: 0,
         isabetSansi: 92,
         beklemeSuresiMs: 1100,
-        staminaToparlanma: 16,
+        staminaToparlanma: 10,
       },
       geri_cekil: {
         temelHasar: 0,
@@ -640,7 +750,7 @@ export const VARSAYILAN_DENGE: DengeConfig = {
     rakipler: {
       sisko_cetin: {
         statlar: { guc: 5, ceviklik: 3, refleks: 3, dayaniklilik: 6 },
-        paraOdulu: 165,
+        paraOdulu: 110,
         itibarOdulu: 2,
         teselliPara: 25,
         cekinmeEsik1: 12,
@@ -649,8 +759,8 @@ export const VARSAYILAN_DENGE: DengeConfig = {
         cekinmeYuzde2: 20,
       },
       jilet_emir: {
-        statlar: { guc: 5, ceviklik: 7, refleks: 6, dayaniklilik: 5 },
-        paraOdulu: 285,
+        statlar: { guc: 7, ceviklik: 7, refleks: 7, dayaniklilik: 8 },
+        paraOdulu: 190,
         itibarOdulu: 3,
         teselliPara: 35,
         cekinmeEsik1: 20,
@@ -659,8 +769,8 @@ export const VARSAYILAN_DENGE: DengeConfig = {
         cekinmeYuzde2: 16,
       },
       demir_serkan: {
-        statlar: { guc: 7, ceviklik: 5, refleks: 7, dayaniklilik: 8 },
-        paraOdulu: 430,
+        statlar: { guc: 8, ceviklik: 6, refleks: 7, dayaniklilik: 10 },
+        paraOdulu: 310,
         itibarOdulu: 5,
         teselliPara: 45,
         cekinmeEsik1: 30,
@@ -669,8 +779,8 @@ export const VARSAYILAN_DENGE: DengeConfig = {
         cekinmeYuzde2: 14,
       },
       kasap_halil: {
-        statlar: { guc: 9, ceviklik: 6, refleks: 6, dayaniklilik: 9 },
-        paraOdulu: 640,
+        statlar: { guc: 11, ceviklik: 8, refleks: 8, dayaniklilik: 13 },
+        paraOdulu: 480,
         itibarOdulu: 8,
         teselliPara: 60,
         cekinmeEsik1: 45,

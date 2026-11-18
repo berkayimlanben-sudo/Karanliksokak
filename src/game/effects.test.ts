@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  _efektAyarOnbellegiSifirla,
   EFEKT_AYARLARI_ANAHTARI,
   efektKatmaniniAyir,
   efektKatmaniniBagla,
@@ -196,6 +197,53 @@ test('prefers-reduced-motion algılanınca tüm efekt kategorileri otomatik 0 ol
       delete (globalThis as { cancelAnimationFrame?: unknown }).cancelAnimationFrame;
     } else {
       (globalThis as { cancelAnimationFrame?: unknown }).cancelAnimationFrame = oncekiCancelRaf;
+    }
+    _efektAyarOnbellegiSifirla();
+  }
+});
+
+test('önceki oturumda kaydedilen tam efektler, OS reduced-motion açılınca ilk yüklemede sıfırlanır ve elle açılan ayar korunur', () => {
+  const oncekiWindow = (globalThis as { window?: unknown }).window;
+  const depo = new Map<string, string>([
+    [
+      EFEKT_AYARLARI_ANAHTARI,
+      JSON.stringify({ sarsinti: 100, flas: 80, parcacik: 90, hitStop: 100 }),
+    ],
+  ]);
+
+  (globalThis as { window: unknown }).window = {
+    innerWidth: 1280,
+    matchMedia: (q: string) => ({
+      matches: q.includes('prefers-reduced-motion: reduce)'),
+      addEventListener() {},
+    }),
+    localStorage: {
+      getItem: (k: string) => depo.get(k) ?? null,
+      setItem: (k: string, v: string) => {
+        depo.set(k, v);
+      },
+    },
+  };
+
+  try {
+    _efektAyarOnbellegiSifirla();
+    assert.deepEqual(getEfektAyarlari(), {
+      sarsinti: 0,
+      flas: 0,
+      parcacik: 0,
+      hitStop: 0,
+    });
+
+    // Kullanıcı reduced-motion açıkken elle bir kategoriyi açarsa sonraki yüklemede korunmalı
+    efektSeviyesi('sarsinti', 75);
+    _efektAyarOnbellegiSifirla();
+    assert.equal(getEfektAyarlari().sarsinti, 75);
+  } finally {
+    _efektAyarOnbellegiSifirla();
+    if (oncekiWindow === undefined) {
+      delete (globalThis as { window?: unknown }).window;
+    } else {
+      (globalThis as { window?: unknown }).window = oncekiWindow;
     }
   }
 });

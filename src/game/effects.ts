@@ -127,13 +127,23 @@ export function reducedMotionAlgilandiMi(): boolean {
   }
 }
 
-function ayarlariKaydet(ayar: EfektAyarlari): void {
+function ayarlariKaydet(ayar: EfektAyarlari, reducedMotionUygulandi?: boolean): void {
   if (typeof window === 'undefined' || !window.localStorage) return;
   try {
-    window.localStorage.setItem(EFEKT_AYARLARI_ANAHTARI, JSON.stringify(ayar));
+    const kayit: EfektAyarlari & { reducedMotionUygulandi?: boolean } = {
+      ...ayar,
+      ...(reducedMotionUygulandi !== undefined ? { reducedMotionUygulandi } : {}),
+    };
+    window.localStorage.setItem(EFEKT_AYARLARI_ANAHTARI, JSON.stringify(kayit));
   } catch {
     // Depolama erişilemezse yoksay
   }
+}
+
+export function _efektAyarOnbellegiSifirla(): void {
+  ayarlarYuklendi = false;
+  mediaListenerBaglandi = false;
+  guncelAyarlar = { ...VARSAYILAN_AYARLAR };
 }
 
 function dinleyicileriBilgilendir(): void {
@@ -158,8 +168,10 @@ function reducedMotionDinleyiciBagla(): void {
       mq.addEventListener('change', (ev: MediaQueryListEvent) => {
         if (ev.matches) {
           guncelAyarlar = { sarsinti: 0, flas: 0, parcacik: 0, hitStop: 0 };
-          ayarlariKaydet(guncelAyarlar);
+          ayarlariKaydet(guncelAyarlar, true);
           dinleyicileriBilgilendir();
+        } else {
+          ayarlariKaydet(guncelAyarlar, false);
         }
       });
     }
@@ -176,28 +188,39 @@ function ayarlariYukle(): EfektAyarlari {
   if (ayarlarYuklendi) return guncelAyarlar;
 
   ayarlarYuklendi = true;
+  const rmAktif = reducedMotionAlgilandiMi();
   try {
     const ham = window.localStorage?.getItem(EFEKT_AYARLARI_ANAHTARI);
     if (ham) {
-      const parsed = JSON.parse(ham) as Partial<EfektAyarlari>;
+      const parsed = JSON.parse(ham) as Partial<EfektAyarlari> & {
+        reducedMotionUygulandi?: boolean;
+      };
+      if (rmAktif && !parsed.reducedMotionUygulandi) {
+        guncelAyarlar = { sarsinti: 0, flas: 0, parcacik: 0, hitStop: 0 };
+        ayarlariKaydet(guncelAyarlar, true);
+        return guncelAyarlar;
+      }
       guncelAyarlar = {
         sarsinti: typeof parsed.sarsinti === 'number' ? clamp100(parsed.sarsinti) : 100,
         flas: typeof parsed.flas === 'number' ? clamp100(parsed.flas) : 100,
         parcacik: typeof parsed.parcacik === 'number' ? clamp100(parsed.parcacik) : 100,
         hitStop: typeof parsed.hitStop === 'number' ? clamp100(parsed.hitStop) : 100,
       };
+      if (!rmAktif && parsed.reducedMotionUygulandi) {
+        ayarlariKaydet(guncelAyarlar, false);
+      }
       return guncelAyarlar;
     }
 
-    if (reducedMotionAlgilandiMi()) {
+    if (rmAktif) {
       guncelAyarlar = { sarsinti: 0, flas: 0, parcacik: 0, hitStop: 0 };
-      ayarlariKaydet(guncelAyarlar);
+      ayarlariKaydet(guncelAyarlar, true);
       return guncelAyarlar;
     }
 
     guncelAyarlar = { ...VARSAYILAN_AYARLAR };
   } catch {
-    guncelAyarlar = reducedMotionAlgilandiMi()
+    guncelAyarlar = rmAktif
       ? { sarsinti: 0, flas: 0, parcacik: 0, hitStop: 0 }
       : { ...VARSAYILAN_AYARLAR };
   }
@@ -228,7 +251,7 @@ export function efektSeviyesi(kategori: EfektKategorisi, deger?: number): number
     ...mevcut,
     [kategori]: temiz,
   };
-  ayarlariKaydet(guncelAyarlar);
+  ayarlariKaydet(guncelAyarlar, reducedMotionAlgilandiMi());
   dinleyicileriBilgilendir();
 
   if (kategori === 'sarsinti' && temiz === 0 && sarsintiHedefi) {

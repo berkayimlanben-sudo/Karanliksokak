@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { KARAKTER_SABITLERI, RAKIP_LISTESI, RakipTanimi, StatId } from './data/gameData';
 import { DENGE, dengeAboneOl } from './game/balance';
 import {
@@ -6,6 +6,8 @@ import {
   durumuYukle,
   evdeUyuVeGunuBitir,
   kaydiSil,
+  kiraBorcuOde,
+  komsuOlayiniKapat,
   macaGirilebilirMi,
   MacSonucOzeti,
   mekanaGit,
@@ -36,18 +38,29 @@ import { TitleScreen } from './components/TitleScreen';
 import { HomeHub } from './components/HomeHub';
 import { ArenaCombatView } from './components/ArenaCombatView';
 import { AudioDebugPanel } from './components/AudioDebugPanel';
+import { ErrorBoundary } from './components/ErrorBoundary';
 
 /**
  * ============================================================================
  * BÖLÜM 4: ANA UYGULAMA KÖKÜ
- * Ekran durumunu ('title' | 'playing' | 'fighting') yönetir, otomatik kayıt ile senkronize eder.
+ * Ekran durumunu ('title' | 'playing' | 'fighting') yönetir, güvenli otomatik
+ * kayıt (gün sonu + dövüş başı/sonu) ve ErrorBoundary ile korur.
  * ============================================================================
  */
 const RAKIP_HARITASI = new Map(RAKIP_LISTESI.map((r) => [r.id, r]));
 
-export default function App() {
-  const [kayitliOyun, setKayitliOyun] = useState<OyunDurumu | null>(() => durumuYukle());
+interface AppIcerikProps {
+  baslangicDurumu?: OyunDurumu | null;
+}
+
+function AppIcerik({ baslangicDurumu }: AppIcerikProps) {
+  const [kayitliOyun, setKayitliOyun] = useState<OyunDurumu | null>(() =>
+    baslangicDurumu !== undefined ? baslangicDurumu : durumuYukle()
+  );
   const [oyunDurumu, setOyunDurumu] = useState<OyunDurumu | null>(() => {
+    if (baslangicDurumu !== undefined) {
+      return baslangicDurumu;
+    }
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
       if (params.get('autostart') === '1') {
@@ -56,8 +69,21 @@ export default function App() {
     }
     return null;
   });
-  const [aktifRakip, setAktifRakip] = useState<RakipTanimi | null>(null);
+  const [aktifRakip, setAktifRakip] = useState<RakipTanimi | null>(() => {
+    if (oyunDurumu?.aktifDovusRakipId) {
+      return RAKIP_HARITASI.get(oyunDurumu.aktifDovusRakipId) ?? null;
+    }
+    return null;
+  });
+  const [macAnahtari, setMacAnahtari] = useState(0);
   const [, setDengeRevizyon] = useState(0);
+  const [debugCokme, setDebugCokme] = useState(false);
+  const oyunDurumuRef = useRef<OyunDurumu | null>(oyunDurumu);
+  oyunDurumuRef.current = oyunDurumu;
+
+  if (debugCokme) {
+    throw new Error('Test amaçlı simüle edilen bileşen çökmesi');
+  }
 
   // Canlı denge değişikliklerinde bileşeni yeniden çiz
   useEffect(() => {
@@ -113,22 +139,41 @@ export default function App() {
     playMusic(aktifMuzikRuhHali);
   }, [aktifMuzikRuhHali]);
 
-  // Her değişiklikte otomatik kaydet
+  // Dövüş ortasında kayıt yok: yalnızca dövüş dışında otomatik kaydet
   useEffect(() => {
-    if (oyunDurumu) {
+    if (oyunDurumu && !aktifRakip) {
       durumuKaydet(oyunDurumu);
     }
-  }, [oyunDurumu]);
+  }, [oyunDurumu, aktifRakip]);
+
+  // Sekme kapanırken dövüş ortasında değilsek son güvenli noktayı yaz
+  useEffect(() => {
+    const guvenliKaydet = () => {
+      if (oyunDurumuRef.current && !aktifRakip) {
+        durumuKaydet(oyunDurumuRef.current);
+      }
+    };
+    window.addEventListener('pagehide', guvenliKaydet);
+    return () => window.removeEventListener('pagehide', guvenliKaydet);
+  }, [aktifRakip]);
 
   const handleDevamEt = useCallback(() => {
-    if (kayitliOyun) {
-      setOyunDurumu(kayitliOyun);
+    const hedef = durumuYukle() ?? kayitliOyun;
+    if (hedef) {
+      const bekleyenRakip = hedef.aktifDovusRakipId
+        ? RAKIP_HARITASI.get(hedef.aktifDovusRakipId) ?? null
+        : null;
+      oyunDurumuRef.current = hedef;
+      setOyunDurumu(hedef);
+      setMacAnahtari((k) => k + 1);
+      setAktifRakip(bekleyenRakip);
     }
   }, [kayitliOyun]);
 
   const handleYeniBaslat = useCallback((lakap: string) => {
     const yeni = yeniOyunOlustur(lakap);
     durumuKaydet(yeni);
+    oyunDurumuRef.current = yeni;
     setKayitliOyun(yeni);
     setAktifRakip(null);
     setOyunDurumu(yeni);
@@ -136,6 +181,7 @@ export default function App() {
 
   const handleSifirla = useCallback(() => {
     kaydiSil();
+    oyunDurumuRef.current = null;
     setKayitliOyun(null);
     setAktifRakip(null);
     setOyunDurumu(null);
@@ -143,34 +189,51 @@ export default function App() {
 
   const durumGuncelle = useCallback(
     (fn: (onceki: OyunDurumu) => OyunDurumu, kaynak = 'aksiyon') => {
-      setOyunDurumu((onceki) => {
-        if (!onceki) return onceki;
-        const sonraki = fn(onceki);
-        if (sonraki !== onceki) {
-          telemetriDurumFarkiniLogla(onceki, sonraki, kaynak);
-        }
-        return sonraki;
-      });
+      const onceki = oyunDurumuRef.current;
+      if (!onceki) return;
+      const sonraki = fn(onceki);
+      if (sonraki === onceki) return;
+      oyunDurumuRef.current = sonraki;
+      telemetriDurumFarkiniLogla(onceki, sonraki, kaynak);
+      if (
+        !aktifRakip &&
+        (sonraki.gun !== onceki.gun || kaynak === 'uyku' || kaynak === 'debug_gun_bitir')
+      ) {
+        durumuKaydet(sonraki);
+      }
+      setOyunDurumu(sonraki);
     },
-    []
+    [aktifRakip]
   );
 
   const handleMacaBasla = useCallback(
     (rakipId: string) => {
-      if (!oyunDurumu) return;
-      const hazir = macaGirilebilirMi(oyunDurumu);
+      const mevcut = oyunDurumuRef.current;
+      if (!mevcut) return;
+      const hazir = macaGirilebilirMi(mevcut);
       if (!hazir.uygun) return;
       const rakip = RAKIP_HARITASI.get(rakipId);
       if (rakip) {
+        // Dövüş başında autosave: olası sekme kapanmasında dövüş başına dönülür
+        const dovusBasiDurum: OyunDurumu = {
+          ...mevcut,
+          aktifDovusRakipId: rakip.id,
+        };
+        durumuKaydet(dovusBasiDurum);
+        oyunDurumuRef.current = dovusBasiDurum;
+        setKayitliOyun(dovusBasiDurum);
+        setOyunDurumu(dovusBasiDurum);
+        setMacAnahtari((k) => k + 1);
         setAktifRakip(rakip);
       }
     },
-    [oyunDurumu]
+    []
   );
 
   const handleMacBitti = useCallback(
     (kazanan: 'oyuncu' | 'rakip' | 'berabere'): MacSonucOzeti => {
-      if (!oyunDurumu || !aktifRakip) {
+      const mevcut = oyunDurumuRef.current;
+      if (!mevcut || !aktifRakip) {
         return {
           kazanan,
           paraDegisimi: 0,
@@ -180,16 +243,20 @@ export default function App() {
         };
       }
       const { yeniDurum, ozet } = dovusSonucunuUygula(
-        oyunDurumu,
+        mevcut,
         aktifRakip.id,
         kazanan
       );
-      telemetriDurumFarkiniLogla(oyunDurumu, yeniDurum, 'dovus');
+      telemetriDurumFarkiniLogla(mevcut, yeniDurum, 'dovus');
       telemetriDovusSonucuLogla(yeniDurum, aktifRakip.id, ozet);
+      // Dövüş sonunda hemen autosave (aktifDovusRakipId temizlenmiş olarak)
+      durumuKaydet(yeniDurum);
+      oyunDurumuRef.current = yeniDurum;
+      setKayitliOyun(yeniDurum);
       setOyunDurumu(yeniDurum);
       return ozet;
     },
-    [oyunDurumu, aktifRakip]
+    [aktifRakip]
   );
 
   const handleArenadanCik = useCallback(() => {
@@ -235,10 +302,20 @@ export default function App() {
 
   const handleDebugZorlaMacBaslat = useCallback(
     (rakip: RakipTanimi) => {
-      if (!oyunDurumu) return;
+      const mevcut = oyunDurumuRef.current;
+      if (!mevcut) return;
+      const dovusBasiDurum: OyunDurumu = {
+        ...mevcut,
+        aktifDovusRakipId: rakip.id,
+      };
+      durumuKaydet(dovusBasiDurum);
+      oyunDurumuRef.current = dovusBasiDurum;
+      setKayitliOyun(dovusBasiDurum);
+      setOyunDurumu(dovusBasiDurum);
+      setMacAnahtari((k) => k + 1);
       setAktifRakip(rakip);
     },
-    [oyunDurumu]
+    []
   );
 
   const aktifEkran = !oyunDurumu ? (
@@ -249,6 +326,7 @@ export default function App() {
     />
   ) : aktifRakip ? (
     <ArenaCombatView
+      key={`${aktifRakip.id}-${macAnahtari}`}
       oyun={oyunDurumu}
       rakip={aktifRakip}
       onMacBitti={handleMacBitti}
@@ -280,6 +358,7 @@ export default function App() {
         durumGuncelle((s) => evEsyasiAl(s, esyaId), 'ev_esyasi')
       }
       onEvYukselt={() => durumGuncelle((s) => evYukselt(s), 'ev_yukselt')}
+      onKiraBorcuOde={() => durumGuncelle((s) => kiraBorcuOde(s), 'kira_borcu_ode')}
       onUyuVeGunuBitir={() =>
         durumGuncelle((s) => evdeUyuVeGunuBitir(s), 'uyku')
       }
@@ -294,6 +373,9 @@ export default function App() {
       }
       onKomsuSecenegi={(secenekId: string) =>
         durumGuncelle((s) => komsuSecenegiUygula(s, secenekId), 'komsu')
+      }
+      onKomsuOlayiniKapat={() =>
+        durumGuncelle((s) => komsuOlayiniKapat(s), 'komsu_kapat')
       }
       onYetenekAc={(yetenekId: string) =>
         durumGuncelle((s) => yetenekAc(s, yetenekId), 'yetenek')
@@ -319,7 +401,49 @@ export default function App() {
         onKiraGununeAtla={handleDebugKiraGununeAtla}
         onZorlaMacBaslat={handleDebugZorlaMacBaslat}
         onDengeDegisti={() => setDengeRevizyon((r) => r + 1)}
+        onHataTesti={() => setDebugCokme(true)}
       />
     </>
+  );
+}
+
+export default function App() {
+  const [oturumAnahtari, setOturumAnahtari] = useState(0);
+  const [kurtarmaDurumu, setKurtarmaDurumu] = useState<OyunDurumu | null | undefined>(
+    undefined
+  );
+
+  const handleKurtarKaydiYukle = useCallback(() => {
+    const yuklenen = durumuYukle();
+    if (yuklenen) {
+      const guvenli: OyunDurumu = {
+        ...yuklenen,
+        aktifDovusRakipId: null,
+        aktifOlay: null,
+        aktifKomsuOlayi: null,
+      };
+      durumuKaydet(guvenli);
+      setKurtarmaDurumu(guvenli);
+    } else {
+      setKurtarmaDurumu(null);
+    }
+    setOturumAnahtari((k) => k + 1);
+  }, []);
+
+  const handleKurtarYeniOyun = useCallback(() => {
+    kaydiSil();
+    const yeni = yeniOyunOlustur(KARAKTER_SABITLERI.varsayilanLakap);
+    durumuKaydet(yeni);
+    setKurtarmaDurumu(yeni);
+    setOturumAnahtari((k) => k + 1);
+  }, []);
+
+  return (
+    <ErrorBoundary
+      onKaydiYukle={handleKurtarKaydiYukle}
+      onYeniOyun={handleKurtarYeniOyun}
+    >
+      <AppIcerik key={oturumAnahtari} baslangicDurumu={kurtarmaDurumu} />
+    </ErrorBoundary>
   );
 }

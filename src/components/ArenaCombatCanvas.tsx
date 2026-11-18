@@ -17,7 +17,7 @@ import {
   pikselSpriteCiz,
   PikselSprite,
 } from '../game/pixelSprites';
-import { hitStopAktifMi } from '../game/effects';
+import { hitStopAktifMi, reducedMotionAlgilandiMi } from '../game/effects';
 import { TEMA } from '../game/theme';
 
 const HAMLE_TURU_HARITASI = new Map(HAMLE_LISTESI.map((h) => [h.id, h.tur]));
@@ -77,6 +77,11 @@ export const ArenaCombatCanvas: React.FC<ArenaCombatCanvasProps> = ({
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
+    const mediaQuery =
+      typeof window !== 'undefined' && typeof window.matchMedia === 'function'
+        ? window.matchMedia('(prefers-reduced-motion: reduce)')
+        : null;
+    let reducedMotion = reducedMotionAlgilandiMi();
     const pixelCanvas = document.createElement('canvas');
     const pCtx = pixelCanvas.getContext('2d');
     const bgCanvas = document.createElement('canvas');
@@ -239,8 +244,9 @@ export const ArenaCombatCanvas: React.FC<ArenaCombatCanvasProps> = ({
         const merkezX = Math.round(vw * 0.5);
 
         // 1. Dövüşçüleri çiz (yakın mesafe karşı karşıya)
-        const oyuncuPoz = spriteSec(d.oyuncu, elapsed);
-        const rakipPoz = spriteSec(d.rakip, elapsed + 0.35);
+        const animElapsed = reducedMotion ? 0 : elapsed;
+        const oyuncuPoz = spriteSec(d.oyuncu, animElapsed);
+        const rakipPoz = spriteSec(d.rakip, reducedMotion ? 0 : animElapsed + 0.35);
 
         const hazirlananTur = d.rakip.hazirlananHamleId
           ? HAMLE_TURU_HARITASI.get(d.rakip.hazirlananHamleId)
@@ -255,7 +261,7 @@ export const ArenaCombatCanvas: React.FC<ArenaCombatCanvasProps> = ({
         const rakipBaseX = merkezX + Math.round(4 * spriteOlcek);
 
         const oX = oyuncuBaseX + oyuncuPoz.ofsetX;
-        const rX = rakipBaseX - rakipPoz.ofsetX + (telgrafAktif ? 2 : 0);
+        const rX = rakipBaseX - rakipPoz.ofsetX + (telgrafAktif && !reducedMotion ? 2 : 0);
         const oY = zeminY + 4;
         const rY = zeminY + 4;
 
@@ -266,7 +272,7 @@ export const ArenaCombatCanvas: React.FC<ArenaCombatCanvasProps> = ({
 
         // Rakip saldırı hazırlığı (telgraf) yumruk parıltısı
         if (telgrafAktif) {
-          const pariltiParlak = Math.floor(d.rakip.otomatikSayacMs / 90) % 2 === 0;
+          const pariltiParlak = reducedMotion || Math.floor(d.rakip.otomatikSayacMs / 90) % 2 === 0;
           pCtx.fillStyle = pariltiParlak
             ? 'rgba(227, 74, 74, 0.38)'
             : 'rgba(217, 155, 56, 0.28)';
@@ -299,7 +305,7 @@ export const ArenaCombatCanvas: React.FC<ArenaCombatCanvasProps> = ({
 
         // Rakip tepesinde pixel `!` saldırı telgrafı
         if (telgrafAktif) {
-          const parlak = Math.floor(d.rakip.otomatikSayacMs / 85) % 2 === 0;
+          const parlak = reducedMotion || Math.floor(d.rakip.otomatikSayacMs / 85) % 2 === 0;
           const unlemX = rX + 7 * spriteOlcek;
           const unlemY = Math.max(25, zeminY - 24 * spriteOlcek - 11);
           pCtx.fillStyle = '#06080E';
@@ -482,7 +488,7 @@ export const ArenaCombatCanvas: React.FC<ArenaCombatCanvasProps> = ({
       }
 
       if (d) {
-        const barAdim = Math.min(1, dt * 10);
+        const barAdim = reducedMotion ? 1 : Math.min(1, dt * 10);
         const oCanHedef = d.oyuncu.can / Math.max(1, d.oyuncu.maksCan);
         const oStamHedef = d.oyuncu.stamina / Math.max(1, d.oyuncu.maksStamina);
         const rCanHedef = d.rakip.can / Math.max(1, d.rakip.maksCan);
@@ -500,9 +506,15 @@ export const ArenaCombatCanvas: React.FC<ArenaCombatCanvasProps> = ({
       }
     };
 
+    const motionChangeDinle = (ev: MediaQueryListEvent) => {
+      reducedMotion = ev.matches;
+    };
+    mediaQuery?.addEventListener?.('change', motionChangeDinle);
+
     rafId = requestAnimationFrame(ciz);
 
     return () => {
+      mediaQuery?.removeEventListener?.('change', motionChangeDinle);
       cancelAnimationFrame(rafId);
       ro.disconnect();
     };

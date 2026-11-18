@@ -47,12 +47,20 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
 
   useEffect(() => {
     const klavyeDinle = (e: KeyboardEvent) => {
-      const aktifEtiket = document.activeElement?.tagName;
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      const aktifEl = document.activeElement as HTMLElement | null;
+      const aktifEtiket = aktifEl?.tagName;
+      if (aktifEl?.isContentEditable || aktifEtiket === 'TEXTAREA' || aktifEtiket === 'SELECT') {
+        return;
+      }
       if (aktifEtiket === 'INPUT') {
-        if (e.key === 'Enter') {
+        if (aktifEl?.id === 'lakap-input' && e.key === 'Enter') {
           e.preventDefault();
           onYeniBaslat(lakap);
         }
+        return;
+      }
+      if (aktifEtiket === 'BUTTON' || aktifEtiket === 'A') {
         return;
       }
       if (e.key === 'Enter' || e.key === ' ') {
@@ -211,6 +219,7 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
               </div>
               <div className="font-mono-tabular text-xs md:text-sm text-[#8B95AB]">
                 Gün {kayitliOyun.gun} · {kayitliOyun.para} ₺
+                {kayitliOyun.aktifDovusRakipId ? ' · Dövüş Başı' : ''}
               </div>
             </div>
 

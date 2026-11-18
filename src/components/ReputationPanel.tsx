@@ -29,11 +29,17 @@ export const ReputationPanel: React.FC<ReputationPanelProps> = ({ state }) => {
   const ahlakiSecimler = state.ahlakiSecimler ?? [];
 
   const secimOzetleri = useMemo(() => {
-    const liste: Array<{ olayBaslik: string; secenekEtiket: string; sonucMetni: string }> = [];
+    const liste: Array<{
+      olayId: string;
+      olayBaslik: string;
+      secenekEtiket: string;
+      sonucMetni: string;
+    }> = [];
     for (const olay of AHLAKI_GRI_OLAYLAR) {
       for (const secenek of olay.secenekler) {
         if (ahlakiSecimler.includes(secenek.id)) {
           liste.push({
+            olayId: olay.id,
             olayBaslik: olay.baslik,
             secenekEtiket: metinSablonunuDoldur(secenek.etiket, state),
             sonucMetni: metinSablonunuDoldur(secenek.sonucMetni, state),
@@ -238,7 +244,7 @@ export const ReputationPanel: React.FC<ReputationPanelProps> = ({ state }) => {
           <div className="space-y-2">
             {secimOzetleri.map((kayit) => (
               <div
-                key={kayit.olayBaslik}
+                key={kayit.olayId}
                 className="border border-[#273147] bg-[#0B0E17] p-3 space-y-1"
               >
                 <p className="text-xs font-bold text-[#D99B38]">{kayit.olayBaslik}</p>

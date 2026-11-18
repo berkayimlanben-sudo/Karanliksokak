@@ -199,6 +199,17 @@ export const ArenaCombatView: React.FC<ArenaCombatViewProps> = ({
   // Klavye kısayolları (1..0, Q, W, E)
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      const aktifEl = document.activeElement as HTMLElement | null;
+      const aktifEtiket = aktifEl?.tagName;
+      if (
+        aktifEl?.isContentEditable ||
+        aktifEtiket === 'INPUT' ||
+        aktifEtiket === 'TEXTAREA' ||
+        aktifEtiket === 'SELECT'
+      ) {
+        return;
+      }
       const hamleId = TUS_HAMLE_HARITASI.get(e.key.toUpperCase());
       if (hamleId) {
         e.preventDefault();
@@ -222,6 +233,19 @@ export const ArenaCombatView: React.FC<ArenaCombatViewProps> = ({
       const mevcut = dovusRef.current;
       if (mevcut.durum !== 'bitti') {
         if (hitStopAktifMi()) {
+          if (mevcut.oyuncu.darbeFlasMs > 0 || mevcut.rakip.darbeFlasMs > 0) {
+            dovusRef.current = {
+              ...mevcut,
+              oyuncu: {
+                ...mevcut.oyuncu,
+                darbeFlasMs: Math.max(0, mevcut.oyuncu.darbeFlasMs - dtMs),
+              },
+              rakip: {
+                ...mevcut.rakip,
+                darbeFlasMs: Math.max(0, mevcut.rakip.darbeFlasMs - dtMs),
+              },
+            };
+          }
           rafId = requestAnimationFrame(adim);
           return;
         }

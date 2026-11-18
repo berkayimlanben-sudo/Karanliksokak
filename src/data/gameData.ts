@@ -824,6 +824,14 @@ export const EV_OLAYLARI: EvOlayi[] = [
           'Bir saat uğraştın ama makineyi döndürmeyi başardın. Emine elini öpüp teşekkür etti.',
         etkiler: { enerji: -14, yorgunluk: 8, moral: 6 },
       },
+      {
+        id: 'sabaha_birak',
+        etiket: 'Şu an elin boş; Emine’den sabaha kadar idare etmesini iste',
+        ipucu: 'Para ve enerji gitmez, moral biraz düşer',
+        sonucMetni:
+          'Annen yorgun yüzüne bakıp gülümsedi: "Üzülme Kerem, yarın çarşıdan bakarız." İçinde hafif bir burukluk kaldı.',
+        etkiler: { moral: -4 },
+      },
     ],
   },
   {
@@ -849,6 +857,14 @@ export const EV_OLAYLARI: EvOlayi[] = [
         sonucMetni:
           'En ağır koliyi çıkarıp selam verdin. Hem vaktini korudun hem komşuyu yarı yolda bırakmadın.',
         etkiler: { enerji: -6, moral: 3 },
+      },
+      {
+        id: 'yorgunum_de_gec',
+        etiket: 'Dermanım kalmadı deyip özür dileyerek geç',
+        ipucu: 'Enerji harcamaz, moral biraz düşer',
+        sonucMetni:
+          'Şükran Teyze solgun halini görünce üstelemedi: "Evladım senin halin kalmamış, git biraz dinlen." Kapıcı çırağına seslendi.',
+        etkiler: { moral: -3 },
       },
     ],
   },
@@ -2177,13 +2193,11 @@ export const AHLAKI_GRI_OLAYLAR: EvOlayi[] = [
       {
         id: 'haracci_reddet',
         etiket: 'Zarfı geri itip mahalle esnafını uyar',
-        ipucu: 'Kolay para kaçar, güven artar',
-        minEnerjiGerekli: 8,
+        ipucu: 'Kolay para kaçar, güven artar (biraz yorgunluk)',
         sonucMetni:
           'Esnaf sana minnetle baktı ama tefecinin adamı soğukça gülüp gitti; kira yükü yine sadece omuzlarında.',
         etkiler: {
-          enerji: -8,
-          yorgunluk: 6,
+          yorgunluk: 8,
           saygi: 6,
           korku: -3,
           moral: 4,
@@ -2281,12 +2295,11 @@ export const AHLAKI_GRI_OLAYLAR: EvOlayi[] = [
       {
         id: 'aile_kira_kesintisi',
         etiket: 'Riske girme, dispanser kuyruğunda bekle ve sınavı ertele',
-        ipucu: 'Elif gezi/sınav fırsatını kaçırır',
-        minEnerjiGerekli: 20,
+        ipucu: 'Elif gezi/sınav fırsatını kaçırır, vakit ve yorgunluk gider',
         sonucMetni:
           'Yarım gün dispanser kuyruğunda bekleyip ilacı çözdün, ama Elif’in sınav/gezi payını ertelemek zorunda kaldın.',
         etkiler: {
-          enerji: -20,
+          yorgunluk: 14,
           sureDakika: 90,
           saygi: 3,
           moral: -8,

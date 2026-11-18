@@ -44,7 +44,9 @@ import {
 import { KarakterGorunumu, MekanId, TEMA } from './theme';
 import { DENGE } from './balance';
 
-export const KAYIT_ANAHTARI = 'karanlik_sokak_kayit_v2';
+export const KAYIT_SURUMU = 3;
+export const ESKI_KAYIT_ANAHTARI_V2 = 'karanlik_sokak_kayit_v2';
+export const KAYIT_ANAHTARI = 'karanlik_sokak_kayit_v3';
 
 const MEKAN_HARITASI = new Map(MEKAN_TANIMLARI.map((m) => [m.id, m]));
 const STAT_HARITASI = new Map(STAT_TANIMLARI.map((s) => [s.id, s]));
@@ -88,6 +90,7 @@ export interface GunlukKayit {
 export type RingTavri = 'dengeli' | 'temiz' | 'sert';
 
 export interface OyunDurumu {
+  surum: number;
   versiyon: number;
   oyuncu: {
     gercekAd: string;
@@ -122,12 +125,16 @@ export interface OyunDurumu {
   evSeviyesi: number; // EV_SEVIYELERI dizinindeki seviye
   evEsyalari: string[]; // Sahip olunan ev eşyası ID'leri
   kiraUyariSayisi: number;
+  sokaktaKaliyor: boolean; // Ev Seviyesi 0'da üst üste kira ödenemezse kapı kilitlenir
   aktifMekan: MekanId;
   aktifOlay: EvOlayi | null;
   sonOlayGunu: number;
   tamamlananTekilOlayIds: string[];
   sonOlayId: string | null;
   macKazanmaSayisi: number;
+  toplamDovusSayisi: number;
+  aktifDovusRakipId: string | null;
+  mekanZiyaretSayilari: Record<string, number>;
   yenilenRakipIds: string[];
   yetenekPuani: number;
   acikYetenekIds: string[];
@@ -405,7 +412,8 @@ export function yeniOyunOlustur(
   const baslangicUyku = 100 - KARAKTER_SABITLERI.baslangicYorgunluk;
 
   return {
-    versiyon: 2,
+    surum: KAYIT_SURUMU,
+    versiyon: KAYIT_SURUMU,
     oyuncu: {
       gercekAd: KARAKTER_SABITLERI.gercekAd,
       lakap,
@@ -439,12 +447,16 @@ export function yeniOyunOlustur(
     evSeviyesi: 0,
     evEsyalari: [],
     kiraUyariSayisi: 0,
+    sokaktaKaliyor: false,
     aktifMekan: 'ev',
     aktifOlay: null,
     sonOlayGunu: 0,
     tamamlananTekilOlayIds: [],
     sonOlayId: null,
     macKazanmaSayisi: 0,
+    toplamDovusSayisi: 0,
+    aktifDovusRakipId: null,
+    mekanZiyaretSayilari: {},
     yenilenRakipIds: [],
     yetenekPuani: 0,
     acikYetenekIds: [],
@@ -729,7 +741,7 @@ export function hesaplaTuretilmisDegerler(state: OyunDurumu): TuretilmisDegerler
   const mevcutEv = EV_SEVIYE_HARITASI.get(state.evSeviyesi) ?? EV_SEVIYELERI[0];
   const sonrakiEv = EV_SEVIYE_HARITASI.get(mevcutEv.seviye + 1) ?? null;
 
-  const kiraDongu = DENGE.zaman.kiraDonguGun;
+  const kiraDongu = Math.max(1, DENGE.zaman.kiraDonguGun);
   const gunDonguIndeksi = (state.gun - 1) % kiraDongu;
   const kirayaKalanGun = kiraDongu - gunDonguIndeksi;
   const kiraEksikTutar = Math.max(0, mevcutEv.haftalikKira - state.para);
@@ -738,10 +750,12 @@ export function hesaplaTuretilmisDegerler(state: OyunDurumu): TuretilmisDegerler
     hamleAcikMi(h, state.statlar, acikYetenekIds, ogrenilenHocaDersIds)
   ).map((h) => h.id);
 
-  const evdeAntrenmanAcik = state.evEsyalari.some((id) => {
-    const esya = ESYA_HARITASI.get(id);
-    return Boolean(esya?.evdeAntrenmanAcar);
-  });
+  const evdeAntrenmanAcik =
+    !state.sokaktaKaliyor &&
+    state.evEsyalari.some((id) => {
+      const esya = ESYA_HARITASI.get(id);
+      return Boolean(esya?.evdeAntrenmanAcar);
+    });
 
   const gucDayaniklilikBonusYuzde = state.evEsyalari.reduce((toplam, id) => {
     const esya = ESYA_HARITASI.get(id);
@@ -764,7 +778,8 @@ export function hesaplaTuretilmisDegerler(state: OyunDurumu): TuretilmisDegerler
         : 0;
   const marketIndirimYuzde =
     saygiSeviyesi === 2 ? v.marketIndirim2 : saygiSeviyesi === 1 ? v.marketIndirim1 : 0;
-  const rakipCekinmeYuzde = rakipCekinmeHesapla(korku, RAKIP_LISTESI[0]).yuzde;
+  const ilkRakip = RAKIP_LISTESI[0];
+  const rakipCekinmeYuzde = ilkRakip ? rakipCekinmeHesapla(korku, ilkRakip).yuzde : 0;
 
   return {
     maksCan,
@@ -885,11 +900,19 @@ export function aktifDebufflariGetir(state: OyunDurumu): AktifDebuff[] {
     });
   }
 
-  if (state.kiraUyariSayisi > 0) {
+  if (state.sokaktaKaliyor) {
+    debufflar.push({
+      id: 'sokakta_kalma',
+      baslik: 'Kapı Kilitli (Sokak)',
+      etki: 'Düşük gece toparlanması',
+      cozum: `${mevcutEv.haftalikKira} ₺ kira öde`,
+      siddet: 'kritik',
+    });
+  } else if (state.kiraUyariSayisi > 0) {
     debufflar.push({
       id: 'kira_uyari',
       baslik: 'Kira Uyarısı',
-      etki: `${mevcutEv.haftalikKira} ₺ ödenmezse alt ev`,
+      etki: `${mevcutEv.haftalikKira} ₺ ödenmezse ceza`,
       cozum: 'Para biriktir',
       siddet: 'kritik',
     });
@@ -902,8 +925,9 @@ function gecmiseEkle(
   gecmis: GunlukKayit[],
   yeniKayit: GunlukKayit
 ): GunlukKayit[] {
-  return gecmis.length >= 18
-    ? [yeniKayit, ...gecmis.slice(0, 17)]
+  const limit = Math.max(1, DENGE.ekonomiVeYasam.gecmisLimiti);
+  return gecmis.length >= limit
+    ? [yeniKayit, ...gecmis.slice(0, limit - 1)]
     : [yeniKayit, ...gecmis];
 }
 
@@ -975,8 +999,14 @@ function yeniGuneGec(
   bayilmaModu: boolean,
   rng: () => number
 ): OyunDurumu {
+  const ek = DENGE.ekonomiVeYasam;
   const mevcutEv = EV_SEVIYE_HARITASI.get(state.evSeviyesi) ?? EV_SEVIYELERI[0];
-  const dayaniklilikBonus = Math.max(0, Math.floor((state.statlar.dayaniklilik.deger - 5) * 2));
+  const dayaniklilikBonus = Math.max(
+    0,
+    Math.floor(
+      (state.statlar.dayaniklilik.deger - ek.uykuDayaniklilikReferans) * ek.uykuDayaniklilikCarpan
+    )
+  );
 
   let esyaEnerjiBonus = 0;
   let esyaUykuBonus = 0;
@@ -990,12 +1020,14 @@ function yeniGuneGec(
     }
   }
 
-  const ek = DENGE.ekonomiVeYasam;
   let yeniPara = state.para;
   let yeniEvSeviyesi = state.evSeviyesi;
   let yeniUyariSayisi = state.kiraUyariSayisi;
+  let yeniSokaktaKaliyor = Boolean(state.sokaktaKaliyor);
   let yeniMoral = sinirla(
-    state.moral + mevcutEv.moralEtkisi + esyaMoralBonus - (bayilmaModu ? ek.bayilmaMoralCezasi : 0),
+    state.moral +
+      (yeniSokaktaKaliyor ? -ek.sokaktaMoralCezasi : mevcutEv.moralEtkisi + esyaMoralBonus) -
+      (bayilmaModu ? ek.bayilmaMoralCezasi : 0),
     0,
     100
   );
@@ -1007,22 +1039,28 @@ function yeniGuneGec(
     ? SAAT_SABITLERI.uyuyakalmaSabahDakika
     : SAAT_SABITLERI.sabahBaslangicDakika;
 
-  const kiraGunuMu = state.gun % DENGE.zaman.kiraDonguGun === 0;
+  const kiraDongu = Math.max(1, DENGE.zaman.kiraDonguGun);
+  const kiraGunuMu = state.gun % kiraDongu === 0;
   let bildirim: GunlukKayit;
 
   if (kiraGunuMu) {
     if (yeniPara >= mevcutEv.haftalikKira) {
+      const sokaktanDondu = yeniSokaktaKaliyor;
       yeniPara -= mevcutEv.haftalikKira;
       yeniUyariSayisi = 0;
+      yeniSokaktaKaliyor = false;
       yeniMoral = sinirla(yeniMoral + ek.kiraOdendiMoralBonus, 0, 100);
       bildirim = {
         gun: yeniGun,
         saatMetni: saatMetni(yeniSaat),
-        metin: `Haftalık ${mevcutEv.haftalikKira} ₺ kira ödendi. Annen Emine rahat bir nefes aldı.`,
+        metin: sokaktanDondu
+          ? `Biriken ${mevcutEv.haftalikKira} ₺ kira ödendi; kapının kilidi açıldı ve eve döndünüz.`
+          : `Haftalık ${mevcutEv.haftalikKira} ₺ kira ödendi. Annen Emine rahat bir nefes aldı.`,
         tur: 'basari',
       };
     } else if (yeniUyariSayisi === 0) {
       yeniUyariSayisi = 1;
+      yeniSokaktaKaliyor = false;
       yeniMoral = sinirla(yeniMoral - ek.kiraIlkUyariMoralCezasi, 0, 100);
       bildirim = {
         gun: yeniGun,
@@ -1033,8 +1071,9 @@ function yeniGuneGec(
     } else if (yeniEvSeviyesi > 0) {
       yeniEvSeviyesi -= 1;
       yeniUyariSayisi = 0;
+      yeniSokaktaKaliyor = false;
       yeniMoral = sinirla(yeniMoral - ek.kiraDusmeMoralCezasi, 0, 100);
-      const dusulenEv = EV_SEVIYELERI[yeniEvSeviyesi];
+      const dusulenEv = EV_SEVIYE_HARITASI.get(yeniEvSeviyesi) ?? EV_SEVIYELERI[0];
       bildirim = {
         gun: yeniGun,
         saatMetni: saatMetni(yeniSaat),
@@ -1042,6 +1081,8 @@ function yeniGuneGec(
         tur: 'uyari',
       };
     } else {
+      yeniUyariSayisi = 2;
+      yeniSokaktaKaliyor = true;
       yeniMoral = sinirla(yeniMoral - ek.kiraIkinciUyariMoralCezasi, 0, 100);
       yeniItibar = {
         ...yeniItibar,
@@ -1051,7 +1092,7 @@ function yeniGuneGec(
       bildirim = {
         gun: yeniGun,
         saatMetni: saatMetni(yeniSaat),
-        metin: 'Kira yine ödenemedi. Ev sahibi kapıyı zorlayıp gözdağı verdi; evde gerginlik büyüdü.',
+        metin: `Kira üst üste ödenemediği için Kemal kapıyı kilitledi; bu geceyi dışarıda geçirdin. ${mevcutEv.haftalikKira} ₺ ödeyene kadar toparlanman düşük kalacak.`,
         tur: 'uyari',
       };
     }
@@ -1061,6 +1102,13 @@ function yeniGuneGec(
       saatMetni: saatMetni(yeniSaat),
       metin:
         'Aşırı geç saat ve bitkinlikten olduğun yerde sızdın. Sabah 10:00’da baş ağrısıyla uyandın; bugünkü verimin -%20 düşük.',
+      tur: 'uyari',
+    };
+  } else if (yeniSokaktaKaliyor) {
+    bildirim = {
+      gun: yeniGun,
+      saatMetni: saatMetni(yeniSaat),
+      metin: `Gün ${yeniGun}: Ev kapısı kilitli olduğu için geceyi dışarıda geçirdin; toparlanma düşük kaldı.`,
       tur: 'uyari',
     };
   } else {
@@ -1082,15 +1130,19 @@ function yeniGuneGec(
 
   const hedefEnerji = bayilmaModu
     ? ek.bayilmaEnerjiHedefi
-    : guncelEv.gunlukEnerjiToparlanma +
-      dayaniklilikBonus +
-      esyaEnerjiBonus +
-      pasifler.gunlukEnerjiBonusu;
+    : yeniSokaktaKaliyor
+      ? ek.sokaktaEnerjiToparlanma + dayaniklilikBonus + pasifler.gunlukEnerjiBonusu
+      : guncelEv.gunlukEnerjiToparlanma +
+        dayaniklilikBonus +
+        esyaEnerjiBonus +
+        pasifler.gunlukEnerjiBonusu;
   const yeniEnerji = sinirla(hedefEnerji, 0, state.maksEnerji);
 
   const uykuKazanimi = bayilmaModu
     ? ek.bayilmaUykuKazanimi
-    : guncelEv.yorgunlukAzaltma + dayaniklilikBonus + esyaUykuBonus + ek.normalUykuTabanEk;
+    : yeniSokaktaKaliyor
+      ? ek.sokaktaYorgunlukAzaltma + dayaniklilikBonus
+      : guncelEv.yorgunlukAzaltma + dayaniklilikBonus + esyaUykuBonus + ek.normalUykuTabanEk;
   const { uyku: yeniUyku, yorgunluk: yeniYorgunluk } = uykuVeYorgunlukAyarla(
     state.uyku,
     uykuKazanimi
@@ -1113,6 +1165,7 @@ function yeniGuneGec(
     itibar: yeniItibar,
     evSeviyesi: yeniEvSeviyesi,
     kiraUyariSayisi: yeniUyariSayisi,
+    sokaktaKaliyor: yeniSokaktaKaliyor,
     aktifMekan: 'ev',
     sonBildirim: bildirim,
     gecmis,
@@ -1182,9 +1235,14 @@ export function mekanaGit(
     -DENGE.zaman.yolculukUykuKaybi
   );
 
+  const oncekiZiyaretler = state.mekanZiyaretSayilari ?? {};
   const araState: OyunDurumu = {
     ...state,
     aktifMekan: hedefMekan,
+    mekanZiyaretSayilari: {
+      ...oncekiZiyaretler,
+      [hedefMekan]: (oncekiZiyaretler[hedefMekan] ?? 0) + 1,
+    },
     enerji: sinirla(state.enerji - enerjiKaybi, 0, state.maksEnerji),
     uyku,
     yorgunluk,
@@ -1865,7 +1923,42 @@ export function evYukselt(state: OyunDurumu): OyunDurumu {
     para: state.para - sonrakiEv.yukseltmeMaliyeti,
     evSeviyesi: sonrakiEv.seviye,
     kiraUyariSayisi: 0,
+    sokaktaKaliyor: false,
     moral: sinirla(state.moral + DENGE.ekonomiVeYasam.evYukseltMoralBonus, 0, 100),
+    sonBildirim: kayit,
+    gecmis: gecmiseEkle(state.gecmis, kayit),
+  };
+}
+
+/**
+ * Kapı kilitli durumdayken biriken kirayı ödeyip evi geri açar.
+ */
+export function kiraBorcuOde(state: OyunDurumu): OyunDurumu {
+  if (olayEngeliVarMi(state) || !state.sokaktaKaliyor) return state;
+  const mevcutEv = EV_SEVIYE_HARITASI.get(state.evSeviyesi) ?? EV_SEVIYELERI[0];
+  if (state.para < mevcutEv.haftalikKira) {
+    return {
+      ...state,
+      sonBildirim: {
+        gun: state.gun,
+        saatMetni: saatMetni(state.saatDakika),
+        metin: `Kapıyı açtırmak için ${mevcutEv.haftalikKira} ₺ gerekiyor.`,
+        tur: 'uyari',
+      },
+    };
+  }
+  const kayit: GunlukKayit = {
+    gun: state.gun,
+    saatMetni: saatMetni(state.saatDakika),
+    metin: `${mevcutEv.haftalikKira} ₺ kira borcu ödendi; ev sahibi kilidi açtı, eve döndün.`,
+    tur: 'basari',
+  };
+  return {
+    ...state,
+    para: state.para - mevcutEv.haftalikKira,
+    kiraUyariSayisi: 0,
+    sokaktaKaliyor: false,
+    moral: sinirla(state.moral + DENGE.ekonomiVeYasam.kiraOdendiMoralBonus, 0, 100),
     sonBildirim: kayit,
     gecmis: gecmiseEkle(state.gecmis, kayit),
   };
@@ -1960,9 +2053,10 @@ export function olaySecenegiUygula(
       const mevcut = yeniStatlar[statId];
       if (!mevcut || !puan) continue;
       const toplam = mevcut.ilerleme + puan;
+      const tasima = Math.floor(toplam / 100);
       yeniStatlar[statId] = {
-        deger: mevcut.deger + Math.floor(toplam / 100),
-        ilerleme: toplam % 100,
+        deger: Math.max(1, mevcut.deger + tasima),
+        ilerleme: ((toplam % 100) + 100) % 100,
       };
     }
   }
@@ -2076,14 +2170,14 @@ export function dovusSonucunuUygula(
     paraDegisimi = rakip.paraOdulu;
     itibarDegisimi = rakip.itibarOdulu + (ilkGalibiyetMi ? 1 : 0);
     if (tavir === 'temiz') {
-      hamSaygiDelta = Math.max(2, rakip.itibarOdulu);
+      hamSaygiDelta = Math.max(dDenge.galibiyetMinSaygiKorku, rakip.itibarOdulu);
       hamKorkuDelta = 0;
     } else if (tavir === 'sert') {
       hamSaygiDelta = 0;
-      hamKorkuDelta = Math.max(2, rakip.itibarOdulu);
+      hamKorkuDelta = Math.max(dDenge.galibiyetMinSaygiKorku, rakip.itibarOdulu);
     } else {
-      hamSaygiDelta = Math.ceil(rakip.itibarOdulu * 0.6);
-      hamKorkuDelta = Math.max(1, Math.floor(rakip.itibarOdulu * 0.5));
+      hamSaygiDelta = Math.ceil(rakip.itibarOdulu * dDenge.dengeliSaygiOran);
+      hamKorkuDelta = Math.max(1, Math.floor(rakip.itibarOdulu * dDenge.dengeliKorkuOran));
     }
     moralDegisimi = dDenge.kazanmaMoral;
     statId = rakip.tarz === 'cevik' ? 'ceviklik' : 'guc';
@@ -2124,7 +2218,10 @@ export function dovusSonucunuUygula(
       : oncekiYenilenler;
 
   const esikOdul = statEsikPuanlariniKontrolEt(yeniStatlar, state.kazanilanStatEsikleri ?? []);
-  const macYetenekPuani = kazanan === 'oyuncu' ? 1 + (ilkGalibiyetMi ? 1 : 0) : 0;
+  const macYetenekPuani =
+    kazanan === 'oyuncu'
+      ? dDenge.kazanmaYetenekPuani + (ilkGalibiyetMi ? dDenge.ilkGalibiyetBonusYp : 0)
+      : 0;
   const toplamYetenekPuaniDegisimi = macYetenekPuani + esikOdul.ekPuan;
 
   const yeniItibar = itibarDengesiUygula(state.itibar, {
@@ -2174,6 +2271,8 @@ export function dovusSonucunuUygula(
     itibar: yeniItibar,
     statlar: yeniStatlar,
     macKazanmaSayisi: (state.macKazanmaSayisi ?? 0) + (kazanan === 'oyuncu' ? 1 : 0),
+    toplamDovusSayisi: (state.toplamDovusSayisi ?? 0) + 1,
+    aktifDovusRakipId: null,
     yenilenRakipIds,
     yetenekPuani: (state.yetenekPuani ?? 0) + toplamYetenekPuaniDegisimi,
     kazanilanStatEsikleri: esikOdul.yeniEsikler,
@@ -2294,9 +2393,10 @@ export function hocaDersiAl(
     ? HAMLE_HARITASI.get(ders.etki.acilanHamleId)
     : undefined;
 
+  const ek = DENGE.ekonomiVeYasam;
   const { uyku, yorgunluk } = uykuVeYorgunlukAyarla(
     state.uyku,
-    -Math.max(6, Math.round(ders.enerjiMaliyeti * 0.5))
+    -Math.max(ek.hocaMinUykuKaybi, Math.round(ders.enerjiMaliyeti * ek.hocaEnerjiUykuCarpani))
   );
 
   const mesaj = acilanHamle
@@ -2473,6 +2573,17 @@ export function komsuEtkilesimiBaslat(
 }
 
 /**
+ * Açık komşu hikaye penceresini hikayeyi ilerletmeden kapatır (ör. oyuncunun parası/enerjisi yetersizse).
+ */
+export function komsuOlayiniKapat(state: OyunDurumu): OyunDurumu {
+  if (!state.aktifKomsuOlayi) return state;
+  return {
+    ...state,
+    aktifKomsuOlayi: null,
+  };
+}
+
+/**
  * Aktif komşu hikaye olayında seçilen seçeneğin etkilerini ve hikaye ilerlemesini uygular.
  */
 export function komsuSecenegiUygula(
@@ -2547,9 +2658,10 @@ export function komsuSecenegiUygula(
       const mevcut = yeniStatlar[statId];
       if (!mevcut || !puan) continue;
       const toplam = mevcut.ilerleme + puan;
+      const tasima = Math.floor(toplam / 100);
       yeniStatlar[statId] = {
-        deger: mevcut.deger + Math.floor(toplam / 100),
-        ilerleme: toplam % 100,
+        deger: Math.max(1, mevcut.deger + tasima),
+        ilerleme: ((toplam % 100) + 100) % 100,
       };
     }
   }
@@ -2698,13 +2810,14 @@ export function aileRuhHaliGetir(state: OyunDurumu): {
   ton: 'sicak' | 'dengeli' | 'gergin';
   aciklama: string;
 } {
-  const bag = state.aileIliskisi ?? 60;
+  const v = DENGE.verimVeEsikler;
+  const bag = state.aileIliskisi ?? DENGE.baslangic.aileIliskisi;
   const secimler = state.ahlakiSecimler ?? [];
   const karanlikSecimSayisi = ['haracci_kabul', 'aile_riskli_koli', 'alaysi_sert_ders'].filter(
     (id) => secimler.includes(id)
   ).length;
 
-  if (bag >= 70 && state.itibar.saygi >= state.itibar.korku) {
+  if (bag >= v.aileSicakEsik && state.itibar.saygi >= state.itibar.korku) {
     return {
       etiket: 'Güvenli ve Sıcak',
       ton: 'sicak',
@@ -2713,7 +2826,11 @@ export function aileRuhHaliGetir(state: OyunDurumu): {
     };
   }
 
-  if (bag < 48 || karanlikSecimSayisi >= 2 || state.itibar.korku >= state.itibar.saygi + 10) {
+  if (
+    bag < v.aileGerginEsik ||
+    karanlikSecimSayisi >= v.aileKaranlikSecimEsik ||
+    state.itibar.korku >= state.itibar.saygi + v.aileKorkuFarkEsik
+  ) {
     return {
       etiket: 'Tedirgin ve Mesafeli',
       ton: 'gergin',
@@ -2786,94 +2903,541 @@ export function komsuItibarYorumuGetir(komsuId: string, state: OyunDurumu): stri
   return null;
 }
 
+function guvenliSayi(deger: unknown, varsayilan: number, min?: number, maks?: number): number {
+  if (typeof deger !== 'number' || !Number.isFinite(deger)) {
+    return varsayilan;
+  }
+  let sonuc = deger;
+  if (min !== undefined) sonuc = Math.max(min, sonuc);
+  if (maks !== undefined) sonuc = Math.min(maks, sonuc);
+  return sonuc;
+}
+
+function duzObjeMi(deger: unknown): deger is Record<string, unknown> {
+  return Boolean(deger && typeof deger === 'object' && !Array.isArray(deger));
+}
+
+function stringDizisiSuz(deger: unknown): string[] {
+  if (!Array.isArray(deger)) return [];
+  return deger.filter((item): item is string => typeof item === 'string' && item.trim().length > 0);
+}
+
+function kayitGecerliMi(deger: unknown): deger is GunlukKayit {
+  if (!duzObjeMi(deger)) return false;
+  return (
+    typeof deger.gun === 'number' &&
+    Number.isFinite(deger.gun) &&
+    deger.gun >= 1 &&
+    typeof deger.metin === 'string' &&
+    (deger.saatMetni === undefined || typeof deger.saatMetni === 'string') &&
+    (deger.tur === 'bilgi' ||
+      deger.tur === 'uyari' ||
+      deger.tur === 'basari' ||
+      deger.tur === 'olay')
+  );
+}
+
+function olaySecenegiGecerliMi(deger: unknown): deger is OlaySecenegi {
+  if (!duzObjeMi(deger)) return false;
+  return (
+    typeof deger.id === 'string' &&
+    deger.id.length > 0 &&
+    typeof deger.etiket === 'string' &&
+    typeof deger.ipucu === 'string' &&
+    typeof deger.sonucMetni === 'string' &&
+    duzObjeMi(deger.etkiler)
+  );
+}
+
+function olayGecerliMi(deger: unknown): deger is EvOlayi {
+  if (!duzObjeMi(deger)) return false;
+  const gecerliKategori =
+    deger.kategori === 'ev' ||
+    deger.kategori === 'mahalle' ||
+    deger.kategori === 'aile' ||
+    deger.kategori === 'baski' ||
+    deger.kategori === 'ahlaki';
+  return (
+    typeof deger.id === 'string' &&
+    deger.id.length > 0 &&
+    typeof deger.baslik === 'string' &&
+    typeof deger.aciklama === 'string' &&
+    gecerliKategori &&
+    Array.isArray(deger.secenekler) &&
+    deger.secenekler.length > 0 &&
+    deger.secenekler.every(olaySecenegiGecerliMi)
+  );
+}
+
+function komsuOlayGecerliMi(deger: unknown): deger is KomsuHikayeOlayi {
+  if (!duzObjeMi(deger)) return false;
+  return (
+    typeof deger.id === 'string' &&
+    deger.id.length > 0 &&
+    typeof deger.komsuId === 'string' &&
+    deger.komsuId.length > 0 &&
+    typeof deger.adim === 'number' &&
+    Number.isFinite(deger.adim) &&
+    deger.adim >= 1 &&
+    typeof deger.baslik === 'string' &&
+    typeof deger.aciklama === 'string' &&
+    Array.isArray(deger.secenekler) &&
+    deger.secenekler.length > 0 &&
+    deger.secenekler.every(olaySecenegiGecerliMi)
+  );
+}
+
+function komsuAdimlariTemizle(deger: unknown): Record<string, number> {
+  if (!duzObjeMi(deger)) return {};
+  const sonuc: Record<string, number> = {};
+  for (const [k, v] of Object.entries(deger)) {
+    if (typeof v === 'number' && Number.isFinite(v) && v >= 0) {
+      sonuc[k] = Math.floor(v);
+    }
+  }
+  return sonuc;
+}
+
+/**
+ * Kayıtlı ham veriyi v2 -> v3 şemasına geçirir, eksik veya bozuk alanları güvenli varsayılanlarla tamamlar.
+ */
+export function kaydiMigrateEt(hamVeri: unknown): OyunDurumu | null {
+  if (!duzObjeMi(hamVeri)) return null;
+
+  const kaynakSurum =
+    typeof hamVeri.surum === 'number'
+      ? hamVeri.surum
+      : typeof hamVeri.versiyon === 'number'
+        ? hamVeri.versiyon
+        : null;
+
+  if (kaynakSurum !== 2 && kaynakSurum !== KAYIT_SURUMU) {
+    return null;
+  }
+
+  const oyuncuHam = hamVeri.oyuncu;
+  if (!duzObjeMi(oyuncuHam) || typeof oyuncuHam.lakap !== 'string' || !oyuncuHam.lakap.trim()) {
+    return null;
+  }
+
+  const statlarHam = hamVeri.statlar;
+  if (!duzObjeMi(statlarHam)) return null;
+
+  const guvenliStatlar = {} as Record<StatId, StatDurumu>;
+  for (const stat of STAT_TANIMLARI) {
+    const tek = statlarHam[stat.id];
+    if (!duzObjeMi(tek) || typeof tek.deger !== 'number' || !Number.isFinite(tek.deger)) {
+      return null;
+    }
+    guvenliStatlar[stat.id] = {
+      deger: Math.max(1, Math.round(tek.deger)),
+      ilerleme: guvenliSayi(tek.ilerleme, 0, 0, 99),
+    };
+  }
+
+  const maksEnerji = guvenliSayi(hamVeri.maksEnerji, KARAKTER_SABITLERI.maksEnerji, 50, 200);
+  const uyku = guvenliSayi(
+    hamVeri.uyku,
+    100 - KARAKTER_SABITLERI.baslangicYorgunluk,
+    0,
+    100
+  );
+  const yorgunluk = guvenliSayi(hamVeri.yorgunluk, 100 - uyku, 0, 100);
+
+  const itibarHam = duzObjeMi(hamVeri.itibar) ? hamVeri.itibar : {};
+  const aktifMekanHam = typeof hamVeri.aktifMekan === 'string' ? hamVeri.aktifMekan : 'ev';
+  const aktifMekan: MekanId = MEKAN_HARITASI.has(aktifMekanHam as MekanId)
+    ? (aktifMekanHam as MekanId)
+    : 'ev';
+
+  const aktifDovusHam =
+    typeof hamVeri.aktifDovusRakipId === 'string' && RAKIP_HARITASI.has(hamVeri.aktifDovusRakipId)
+      ? hamVeri.aktifDovusRakipId
+      : null;
+
+  const gorunumHam = duzObjeMi(oyuncuHam.gorunum) ? oyuncuHam.gorunum : {};
+  const vGor = TEMA.varsayilanKarakterGorunumu;
+  const guvenliGorunum: KarakterGorunumu = {
+    tenRengi: typeof gorunumHam.tenRengi === 'string' ? gorunumHam.tenRengi : vGor.tenRengi,
+    golgeTenRengi:
+      typeof gorunumHam.golgeTenRengi === 'string'
+        ? gorunumHam.golgeTenRengi
+        : vGor.golgeTenRengi,
+    sacRengi: typeof gorunumHam.sacRengi === 'string' ? gorunumHam.sacRengi : vGor.sacRengi,
+    ustKiyafetRengi:
+      typeof gorunumHam.ustKiyafetRengi === 'string'
+        ? gorunumHam.ustKiyafetRengi
+        : vGor.ustKiyafetRengi,
+    ustKiyafetGolge:
+      typeof gorunumHam.ustKiyafetGolge === 'string'
+        ? gorunumHam.ustKiyafetGolge
+        : vGor.ustKiyafetGolge,
+    altKiyafetRengi:
+      typeof gorunumHam.altKiyafetRengi === 'string'
+        ? gorunumHam.altKiyafetRengi
+        : vGor.altKiyafetRengi,
+    bandajRengi:
+      typeof gorunumHam.bandajRengi === 'string' ? gorunumHam.bandajRengi : vGor.bandajRengi,
+    konturRengi:
+      typeof gorunumHam.konturRengi === 'string' ? gorunumHam.konturRengi : vGor.konturRengi,
+    yapiOlcegi: guvenliSayi(gorunumHam.yapiOlcegi, vGor.yapiOlcegi, 0.7, 1.5),
+  };
+
+  const ziyaretHam = duzObjeMi(hamVeri.mekanZiyaretSayilari)
+    ? (hamVeri.mekanZiyaretSayilari as Record<string, number>)
+    : {};
+  const temizZiyaretler: Record<string, number> = {};
+  for (const [k, v] of Object.entries(ziyaretHam)) {
+    if (typeof v === 'number' && Number.isFinite(v) && v >= 0) {
+      temizZiyaretler[k] = Math.floor(v);
+    }
+  }
+
+  const temizGecmis = Array.isArray(hamVeri.gecmis)
+    ? hamVeri.gecmis.filter(kayitGecerliMi)
+    : [];
+
+  return {
+    surum: KAYIT_SURUMU,
+    versiyon: KAYIT_SURUMU,
+    oyuncu: {
+      gercekAd:
+        typeof oyuncuHam.gercekAd === 'string' && oyuncuHam.gercekAd.trim()
+          ? oyuncuHam.gercekAd
+          : KARAKTER_SABITLERI.gercekAd,
+      lakap: oyuncuHam.lakap.trim(),
+      yas: guvenliSayi(oyuncuHam.yas, KARAKTER_SABITLERI.yas, 16, 80),
+      gorunum: guvenliGorunum,
+    },
+    gun: guvenliSayi(hamVeri.gun, 1, 1),
+    saatDakika: guvenliSayi(hamVeri.saatDakika, SAAT_SABITLERI.sabahBaslangicDakika, 0),
+    enerji: guvenliSayi(hamVeri.enerji, KARAKTER_SABITLERI.baslangicEnerji, 0, maksEnerji),
+    maksEnerji,
+    tokluk: guvenliSayi(hamVeri.tokluk, KARAKTER_SABITLERI.baslangicTokluk, 0, 100),
+    uyku,
+    yorgunluk,
+    moral: guvenliSayi(hamVeri.moral, KARAKTER_SABITLERI.baslangicMoral, 0, 100),
+    para: guvenliSayi(hamVeri.para, KARAKTER_SABITLERI.baslangicPara, 0),
+    buzdolabiStok: guvenliSayi(hamVeri.buzdolabiStok, KARAKTER_SABITLERI.baslangicBuzdolabi, 0),
+    salonGirisGunu: guvenliSayi(hamVeri.salonGirisGunu, 0, 0),
+    anneKonusmaGunu: guvenliSayi(hamVeri.anneKonusmaGunu, 0, 0),
+    elifKonusmaGunu: guvenliSayi(hamVeri.elifKonusmaGunu, 0, 0),
+    uyuyakalmaCezasi: Boolean(hamVeri.uyuyakalmaCezasi),
+    itibar: {
+      genel: guvenliSayi(itibarHam.genel, 0, 0),
+      saygi: guvenliSayi(itibarHam.saygi, 0, 0, ITIBAR_SABITLERI.maksItibar),
+      korku: guvenliSayi(itibarHam.korku, 0, 0, ITIBAR_SABITLERI.maksItibar),
+    },
+    statlar: guvenliStatlar,
+    evSeviyesi: guvenliSayi(hamVeri.evSeviyesi, 0, 0, EV_SEVIYELERI.length - 1),
+    kiraUyariSayisi: guvenliSayi(hamVeri.kiraUyariSayisi, 0, 0),
+    sokaktaKaliyor: Boolean(hamVeri.sokaktaKaliyor),
+    aktifMekan,
+    aktifOlay: olayGecerliMi(hamVeri.aktifOlay) ? hamVeri.aktifOlay : null,
+    sonOlayGunu: guvenliSayi(hamVeri.sonOlayGunu, 0, 0),
+    evEsyalari: stringDizisiSuz(hamVeri.evEsyalari),
+    gecmis: temizGecmis,
+    tamamlananTekilOlayIds: stringDizisiSuz(hamVeri.tamamlananTekilOlayIds),
+    sonOlayId: typeof hamVeri.sonOlayId === 'string' ? hamVeri.sonOlayId : null,
+    macKazanmaSayisi: guvenliSayi(hamVeri.macKazanmaSayisi, 0, 0),
+    // v2 -> v3 örnek migration 1: yeni sayısal alan yoksa varsayılan 0
+    toplamDovusSayisi: guvenliSayi(hamVeri.toplamDovusSayisi, 0, 0),
+    aktifDovusRakipId: aktifDovusHam,
+    // v2 -> v3 örnek migration 2: yeni obje alanı yoksa boş obje {}
+    mekanZiyaretSayilari: temizZiyaretler,
+    yenilenRakipIds: stringDizisiSuz(hamVeri.yenilenRakipIds),
+    yetenekPuani: guvenliSayi(hamVeri.yetenekPuani, 0, 0),
+    acikYetenekIds: stringDizisiSuz(hamVeri.acikYetenekIds),
+    kazanilanStatEsikleri: stringDizisiSuz(hamVeri.kazanilanStatEsikleri),
+    ogrenilenHocaDersIds: stringDizisiSuz(hamVeri.ogrenilenHocaDersIds),
+    komsuAdimlari: komsuAdimlariTemizle(hamVeri.komsuAdimlari),
+    komsuSecimleri: stringDizisiSuz(hamVeri.komsuSecimleri),
+    komsuBayraklari: stringDizisiSuz(hamVeri.komsuBayraklari),
+    aktifKomsuOlayi: komsuOlayGecerliMi(hamVeri.aktifKomsuOlayi) ? hamVeri.aktifKomsuOlayi : null,
+    aileIliskisi: guvenliSayi(hamVeri.aileIliskisi, DENGE.baslangic.aileIliskisi, 0, 100),
+    ahlakiSecimler: stringDizisiSuz(hamVeri.ahlakiSecimler),
+    komsuDayanismaGunu: guvenliSayi(hamVeri.komsuDayanismaGunu, 0, 0),
+    ringTavri:
+      hamVeri.ringTavri === 'temiz' ||
+      hamVeri.ringTavri === 'sert' ||
+      hamVeri.ringTavri === 'dengeli'
+        ? hamVeri.ringTavri
+        : 'dengeli',
+    sonBildirim: kayitGecerliMi(hamVeri.sonBildirim) ? hamVeri.sonBildirim : null,
+  };
+}
+
 /**
  * Oyun durumunu yerel depolamaya otomatik kaydeder.
  */
 export function durumuKaydet(state: OyunDurumu): void {
   if (typeof window === 'undefined' || !window.localStorage) return;
   try {
-    window.localStorage.setItem(KAYIT_ANAHTARI, JSON.stringify(state));
+    const kayitVerisi: OyunDurumu = {
+      ...state,
+      surum: KAYIT_SURUMU,
+      versiyon: KAYIT_SURUMU,
+    };
+    window.localStorage.setItem(KAYIT_ANAHTARI, JSON.stringify(kayitVerisi));
   } catch {
     // Depolama kotası doluysa sessizce geç
   }
 }
 
 /**
- * Yerel depolamadan kayıtlı oyunu yükler ve eski kayıtları yeni alanlarla tamamlar.
+ * Yerel depolamadan kayıtlı oyunu yükler; v2 kaydı varsa otomatik olarak v3'e geçirir.
  */
 export function durumuYukle(): OyunDurumu | null {
   if (typeof window === 'undefined' || !window.localStorage) return null;
   try {
-    const ham = window.localStorage.getItem(KAYIT_ANAHTARI);
-    if (!ham) return null;
-    const ayrilmis = JSON.parse(ham) as OyunDurumu;
-    if (
-      !ayrilmis ||
-      ayrilmis.versiyon !== 2 ||
-      typeof ayrilmis.oyuncu?.lakap !== 'string' ||
-      !ayrilmis.oyuncu.lakap ||
-      typeof ayrilmis.statlar?.guc?.deger !== 'number' ||
-      typeof ayrilmis.statlar?.ceviklik?.deger !== 'number' ||
-      typeof ayrilmis.statlar?.refleks?.deger !== 'number' ||
-      typeof ayrilmis.statlar?.dayaniklilik?.deger !== 'number'
-    ) {
-      return null;
+    const hamV3 = window.localStorage.getItem(KAYIT_ANAHTARI);
+    if (hamV3) {
+      try {
+        const ayrilmisV3 = JSON.parse(hamV3) as Record<string, unknown>;
+        const gecirilmis = kaydiMigrateEt(ayrilmisV3);
+        if (gecirilmis) {
+          if (ayrilmisV3?.surum !== KAYIT_SURUMU) {
+            durumuKaydet(gecirilmis);
+          }
+          return gecirilmis;
+        }
+      } catch {
+        // Bozuk v3 JSON'u v2 fallback'ını engellemesin; aşağıda uyar
+      }
+      console.warn('v3 kayıt doğrulaması başarısız, yedek v2 aranıyor.');
     }
-    return {
-      ...ayrilmis,
-      evEsyalari: Array.isArray(ayrilmis.evEsyalari) ? ayrilmis.evEsyalari : [],
-      gecmis: Array.isArray(ayrilmis.gecmis) ? ayrilmis.gecmis : [],
-      tamamlananTekilOlayIds: Array.isArray(ayrilmis.tamamlananTekilOlayIds)
-        ? ayrilmis.tamamlananTekilOlayIds
-        : [],
-      sonOlayId: ayrilmis.sonOlayId ?? null,
-      macKazanmaSayisi:
-        typeof ayrilmis.macKazanmaSayisi === 'number' ? ayrilmis.macKazanmaSayisi : 0,
-      yenilenRakipIds: Array.isArray(ayrilmis.yenilenRakipIds)
-        ? ayrilmis.yenilenRakipIds
-        : [],
-      yetenekPuani: typeof ayrilmis.yetenekPuani === 'number' ? ayrilmis.yetenekPuani : 0,
-      acikYetenekIds: Array.isArray(ayrilmis.acikYetenekIds) ? ayrilmis.acikYetenekIds : [],
-      kazanilanStatEsikleri: Array.isArray(ayrilmis.kazanilanStatEsikleri)
-        ? ayrilmis.kazanilanStatEsikleri
-        : [],
-      ogrenilenHocaDersIds: Array.isArray(ayrilmis.ogrenilenHocaDersIds)
-        ? ayrilmis.ogrenilenHocaDersIds
-        : [],
-      komsuAdimlari:
-        ayrilmis.komsuAdimlari && typeof ayrilmis.komsuAdimlari === 'object'
-          ? ayrilmis.komsuAdimlari
-          : {},
-      komsuSecimleri: Array.isArray(ayrilmis.komsuSecimleri) ? ayrilmis.komsuSecimleri : [],
-      komsuBayraklari: Array.isArray(ayrilmis.komsuBayraklari) ? ayrilmis.komsuBayraklari : [],
-      aktifKomsuOlayi: ayrilmis.aktifKomsuOlayi ?? null,
-      aileIliskisi:
-        typeof ayrilmis.aileIliskisi === 'number'
-          ? ayrilmis.aileIliskisi
-          : DENGE.baslangic.aileIliskisi,
-      ahlakiSecimler: Array.isArray(ayrilmis.ahlakiSecimler) ? ayrilmis.ahlakiSecimler : [],
-      komsuDayanismaGunu:
-        typeof ayrilmis.komsuDayanismaGunu === 'number' ? ayrilmis.komsuDayanismaGunu : 0,
-      ringTavri:
-        ayrilmis.ringTavri === 'temiz' ||
-        ayrilmis.ringTavri === 'sert' ||
-        ayrilmis.ringTavri === 'dengeli'
-          ? ayrilmis.ringTavri
-          : 'dengeli',
-    };
+
+    const hamV2 = window.localStorage.getItem(ESKI_KAYIT_ANAHTARI_V2);
+    if (hamV2) {
+      const ayrilmisV2 = JSON.parse(hamV2);
+      const gecirilmis = kaydiMigrateEt(ayrilmisV2);
+      if (gecirilmis) {
+        durumuKaydet(gecirilmis);
+        return gecirilmis;
+      }
+    }
+
+    return null;
   } catch {
     return null;
   }
 }
 
 /**
- * Kayıtlı ilerlemeyi siler.
+ * Kayıtlı ilerlemeyi (v3 ve varsa eski v2 anahtarını) siler.
  */
 export function kaydiSil(): void {
   if (typeof window === 'undefined' || !window.localStorage) return;
   try {
     window.localStorage.removeItem(KAYIT_ANAHTARI);
+    window.localStorage.removeItem(ESKI_KAYIT_ANAHTARI_V2);
   } catch {
     // Yoksay
   }
 }
+
+export interface ReferansSimulasyonRaporu {
+  simulasyonSayisi: number;
+  gunSayisi: number;
+  kiraOdeyenOrani: number;
+  borcluKalanOrani: number;
+  sokaktaKalanOrani: number;
+  kazanmaOrani: number;
+  ortalamaMacSayisi: number;
+  ortalamaFinalPara: number;
+  ortalamaStatToplam: number;
+  ortalamaMoral: number;
+  bayilmaOrani: number;
+}
+
+export type DovusCozumleyici = (
+  state: OyunDurumu,
+  rakip: RakipTanimi,
+  rng: () => number
+) => 'oyuncu' | 'rakip' | 'berabere';
+
+function deterministikRng(seed: number): () => number {
+  let s = seed >>> 0;
+  return () => {
+    s = (1664525 * s + 1013904223) >>> 0;
+    return s / 4294967296;
+  };
+}
+
+function varsayilanDovusCoz(
+  state: OyunDurumu,
+  rakip: RakipTanimi,
+  rng: () => number
+): 'oyuncu' | 'rakip' | 'berabere' {
+  const oyuncuGuc =
+    state.statlar.guc.deger +
+    state.statlar.ceviklik.deger +
+    state.statlar.refleks.deger +
+    state.statlar.dayaniklilik.deger;
+  const rakipGuc =
+    rakip.statlar.guc +
+    rakip.statlar.ceviklik +
+    rakip.statlar.refleks +
+    rakip.statlar.dayaniklilik;
+  const fark = oyuncuGuc - rakipGuc;
+  const olasilik = sinirla(0.58 + fark * 0.05, 0.1, 0.96);
+  return rng() < olasilik ? 'oyuncu' : 'rakip';
+}
+
+/**
+ * D3-Adım-5 Referans Strateji Headless Simülasyonu:
+ * Günde 2 antrenman + 1 dövüş + 2 öğün yemek + akşam 1 dinlenme düzeniyle
+ * belirtilen sayıda oyunu N gün boyunca simüle eder ve ekonomi/dövüş dengesini raporlar.
+ */
+export function referansStratejiSimuleEt(
+  simulasyonSayisi = 100,
+  gunSayisi = 10,
+  dovusCozumleyici: DovusCozumleyici = varsayilanDovusCoz
+): ReferansSimulasyonRaporu {
+  const statSirasi: StatId[] = ['guc', 'ceviklik', 'dayaniklilik', 'refleks'];
+  let kiraOdeyen = 0;
+  let borcluKalan = 0;
+  let sokaktaKalan = 0;
+  let toplamGalibiyet = 0;
+  let toplamMac = 0;
+  let toplamPara = 0;
+  let toplamStat = 0;
+  let toplamMoral = 0;
+  let toplamBayilma = 0;
+
+  const birOgunYe = (mevcut: OyunDurumu, rng: () => number): OyunDurumu => {
+    let s = mevcut;
+    if (s.buzdolabiStok > 0) {
+      if (s.aktifMekan !== 'ev') s = mekanaGit(s, 'ev', rng);
+      return yemekYe(s, 'ev_yemegi', rng);
+    }
+    const posetFiyat = DENGE.yemekler.market_mutfak_poseti.fiyat;
+    if (s.para >= posetFiyat) {
+      if (s.aktifMekan !== 'market') s = mekanaGit(s, 'market', rng);
+      s = yemekYe(s, 'market_mutfak_poseti', rng);
+      s = mekanaGit(s, 'ev', rng);
+      return yemekYe(s, 'ev_yemegi', rng);
+    }
+    if (s.para >= DENGE.yemekler.market_simit.fiyat) {
+      if (s.aktifMekan !== 'market') s = mekanaGit(s, 'market', rng);
+      return yemekYe(s, 'market_simit', rng);
+    }
+    if (s.aktifMekan === 'ev') {
+      return acilCorbaIc(s, rng);
+    }
+    return s;
+  };
+
+  for (let i = 1; i <= simulasyonSayisi; i += 1) {
+    const rng = deterministikRng(i * 9973 + 17);
+    let oyun = yeniOyunOlustur('Gölge', rng);
+    let kiraCezasiAldi = false;
+
+    for (let gun = 1; gun <= gunSayisi; gun += 1) {
+      if (oyun.aktifOlay) {
+        const uygunlar = oyun.aktifOlay.secenekler.filter((sec) => {
+          const p =
+            sec.minParaGerekli ??
+            (sec.etkiler.para && sec.etkiler.para < 0 ? Math.abs(sec.etkiler.para) : 0);
+          const e =
+            sec.minEnerjiGerekli ??
+            (sec.etkiler.enerji && sec.etkiler.enerji < 0 ? Math.abs(sec.etkiler.enerji) : 0);
+          return oyun.para >= p && oyun.enerji >= e;
+        });
+        if (uygunlar.length > 0) {
+          uygunlar.sort((a, b) => ((a.etkiler.para ?? 0) < (b.etkiler.para ?? 0) ? 1 : -1));
+          oyun = olaySecenegiUygula(oyun, uygunlar[0].id, rng);
+        }
+      }
+
+      if (oyun.yetenekPuani > 0) {
+        for (const y of YETENEK_AGACI) {
+          if (yetenekAcilabilirMi(oyun, y.id).acilabilir) {
+            oyun = yetenekAc(oyun, y.id);
+            break;
+          }
+        }
+      }
+
+      // 1. öğün yemek
+      oyun = birOgunYe(oyun, rng);
+
+      // 2 antrenman
+      const salonUcreti = DENGE.antrenman.salonGunlukGirisUcreti;
+      if (oyun.gun === gun && oyun.para >= salonUcreti && oyun.enerji >= 45) {
+        oyun = mekanaGit(oyun, 'spor_salonu', rng);
+        for (let t = 0; t < 2; t += 1) {
+          if (oyun.gun !== gun || oyun.enerji < 24) break;
+          const statId = statSirasi[(gun + t) % statSirasi.length];
+          oyun = antrenmanYap(oyun, statId, {}, rng);
+        }
+      }
+
+      // 2. öğün yemek
+      if (oyun.gun === gun) {
+        oyun = birOgunYe(oyun, rng);
+      }
+
+      // 1 dövüş
+      const ilkRakip = RAKIP_LISTESI[0];
+      if (oyun.gun === gun && ilkRakip && macaGirilebilirMi(oyun).uygun) {
+        oyun = mekanaGit(oyun, 'sokak_arena', rng);
+        if (macaGirilebilirMi(oyun).uygun) {
+          const kazanan = dovusCozumleyici(oyun, ilkRakip, rng);
+          toplamMac += 1;
+          if (kazanan === 'oyuncu') toplamGalibiyet += 1;
+          oyun = dovusSonucunuUygula(oyun, ilkRakip.id, kazanan, rng).yeniDurum;
+        }
+      }
+
+      // Akşam 1 dinlenme (aile etkileşimi) + uyku
+      if (oyun.gun === gun) {
+        oyun = mekanaGit(oyun, 'ev', rng);
+        if (oyun.gun === gun) {
+          oyun = aileyleEtkiles(oyun, gun % 2 === 0 ? 'anne_emine' : 'kardes_elif', rng);
+        }
+        if (oyun.gun === gun) {
+          oyun = evdeUyuVeGunuBitir(oyun, rng);
+        } else {
+          toplamBayilma += 1;
+        }
+      } else {
+        toplamBayilma += 1;
+      }
+
+      if (oyun.kiraUyariSayisi > 0 || oyun.sokaktaKaliyor) {
+        kiraCezasiAldi = true;
+      }
+    }
+
+    if (!kiraCezasiAldi && oyun.kiraUyariSayisi === 0 && !oyun.sokaktaKaliyor) {
+      kiraOdeyen += 1;
+    } else {
+      borcluKalan += 1;
+    }
+    if (oyun.sokaktaKaliyor) sokaktaKalan += 1;
+
+    toplamPara += oyun.para;
+    toplamMoral += oyun.moral;
+    toplamStat +=
+      oyun.statlar.guc.deger +
+      oyun.statlar.ceviklik.deger +
+      oyun.statlar.refleks.deger +
+      oyun.statlar.dayaniklilik.deger;
+  }
+
+  return {
+    simulasyonSayisi,
+    gunSayisi,
+    kiraOdeyenOrani: kiraOdeyen / simulasyonSayisi,
+    borcluKalanOrani: borcluKalan / simulasyonSayisi,
+    sokaktaKalanOrani: sokaktaKalan / simulasyonSayisi,
+    kazanmaOrani: toplamMac > 0 ? toplamGalibiyet / toplamMac : 0,
+    ortalamaMacSayisi: toplamMac / simulasyonSayisi,
+    ortalamaFinalPara: Math.round(toplamPara / simulasyonSayisi),
+    ortalamaStatToplam: Number((toplamStat / simulasyonSayisi).toFixed(1)),
+    ortalamaMoral: Math.round(toplamMoral / simulasyonSayisi),
+    bayilmaOrani: toplamBayilma / (simulasyonSayisi * gunSayisi),
+  };
+}
+

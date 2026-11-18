@@ -7,7 +7,9 @@ import {
   aktifDebufflariGetir,
   antrenmanYap,
   dovusSonucunuUygula,
+  durumuKaydet,
   durumuYukle,
+  ESKI_KAYIT_ANAHTARI_V2,
   evdeUyuVeGunuBitir,
   evEsyasiAl,
   evYukselt,
@@ -17,10 +19,15 @@ import {
   indirimliMarketFiyati,
   itibarDengesiUygula,
   KAYIT_ANAHTARI,
+  KAYIT_SURUMU,
+  kaydiMigrateEt,
+  kaydiSil,
+  kiraBorcuOde,
   komsuDayanismasiAl,
   komsuEtkilesimiBaslat,
   komsuItibarYorumuGetir,
   komsuMusaitOlayiGetir,
+  komsuOlayiniKapat,
   komsuSecenegiUygula,
   mekanaGit,
   mekandakiMusaitKomsuOlaylari,
@@ -30,6 +37,7 @@ import {
   OyunDurumu,
   rakipCekinmeHesapla,
   rastgeleEvOlayiSec,
+  referansStratejiSimuleEt,
   ringTavriDegistir,
   saatMetni,
   sokakGolgeBoksu,
@@ -39,6 +47,8 @@ import {
   yetenekAc,
   yetenekAcilabilirMi,
 } from './engine';
+import { dovusAdimi, dovusBaslat, oyuncuHamleSec } from './combat';
+import { dengeGuncelle, dengeSifirla, VARSAYILAN_DENGE } from './balance';
 import {
   AHLAKI_GRI_OLAYLAR,
   ANTRENOR_DERSLERI,
@@ -897,5 +907,260 @@ test('seviye bazlı rakip çekinmesi, debuff rozetleri, etki rozetleri ve isim k
   const yasakliIsim = 'berk' + 'ay';
   assert.equal(veriMetni.includes(yasakliIsim), false);
 });
+
+test('D3-Adım-2 kayıt sürümleme (v2 -> v3 migration), eksik alan tamamlama ve güvenli yükleme', () => {
+  assert.equal(KAYIT_ANAHTARI, 'karanlik_sokak_kayit_v3');
+  assert.equal(ESKI_KAYIT_ANAHTARI_V2, 'karanlik_sokak_kayit_v2');
+  assert.equal(KAYIT_SURUMU, 3);
+
+  const yeni = yeniOyunOlustur('Gölge');
+  assert.equal(yeni.surum, 3);
+  assert.equal(yeni.versiyon, 3);
+  assert.equal(yeni.toplamDovusSayisi, 0);
+  assert.deepEqual(yeni.mekanZiyaretSayilari, {});
+  assert.equal(yeni.aktifDovusRakipId, null);
+
+  // v2 anahtarındaki eski bir kayıt (surum ve v3 alanları yok) otomatik v3'e geçirilmeli
+  const eskiWindow = (globalThis as { window?: unknown }).window;
+  const v2Ham = {
+    ...yeni,
+    versiyon: 2,
+    gun: 4,
+    para: 640,
+  } as Record<string, unknown>;
+  delete v2Ham.surum;
+  delete v2Ham.toplamDovusSayisi;
+  delete v2Ham.mekanZiyaretSayilari;
+  delete v2Ham.aktifDovusRakipId;
+
+  const depo = new Map<string, string>([
+    [ESKI_KAYIT_ANAHTARI_V2, JSON.stringify(v2Ham)],
+  ]);
+
+  Object.defineProperty(globalThis, 'window', {
+    configurable: true,
+    value: {
+      localStorage: {
+        getItem: (k: string) => depo.get(k) ?? null,
+        setItem: (k: string, v: string) => {
+          depo.set(k, v);
+        },
+        removeItem: (k: string) => {
+          depo.delete(k);
+        },
+      },
+    },
+  });
+
+  try {
+    const yuklenen = durumuYukle();
+    assert.ok(yuklenen);
+    assert.equal(yuklenen.surum, 3);
+    assert.equal(yuklenen.versiyon, 3);
+    assert.equal(yuklenen.gun, 4);
+    assert.equal(yuklenen.para, 640);
+    // 2 örnek migration doğrulaması
+    assert.equal(yuklenen.toplamDovusSayisi, 0);
+    assert.deepEqual(yuklenen.mekanZiyaretSayilari, {});
+    assert.equal(yuklenen.aktifDovusRakipId, null);
+
+    // v3 anahtarına otomatik yazılmış olmalı
+    const yazilanV3 = depo.get(KAYIT_ANAHTARI);
+    assert.ok(yazilanV3);
+    assert.equal((JSON.parse(yazilanV3) as { surum: number }).surum, 3);
+
+    // kaydiSil hem v3 hem v2 anahtarını temizlemeli
+    kaydiSil();
+    assert.equal(depo.has(KAYIT_ANAHTARI), false);
+    assert.equal(depo.has(ESKI_KAYIT_ANAHTARI_V2), false);
+
+    // Dövüş başında aktifDovusRakipId kaydedilip dövüş sonunda temizlenmeli
+    const dovusBasi: OyunDurumu = { ...yeni, aktifDovusRakipId: RAKIP_LISTESI[0].id };
+    durumuKaydet(dovusBasi);
+    const yuklenenDovusBasi = durumuYukle();
+    assert.equal(yuklenenDovusBasi?.aktifDovusRakipId, RAKIP_LISTESI[0].id);
+
+    const { yeniDurum } = dovusSonucunuUygula(dovusBasi, RAKIP_LISTESI[0].id, 'oyuncu', () => 0.99);
+    assert.equal(yeniDurum.aktifDovusRakipId, null);
+    assert.equal(yeniDurum.toplamDovusSayisi, 1);
+
+    // Geçersiz veya bozuk kayıtlar güvenli null dönmeli / NaN alanları düzeltmeli
+    assert.equal(kaydiMigrateEt({ surum: 99, oyuncu: { lakap: 'X' } }), null);
+    assert.equal(kaydiMigrateEt(null), null);
+    const bozukPara = kaydiMigrateEt({ ...v2Ham, para: Number.NaN });
+    assert.ok(bozukPara);
+    assert.equal(Number.isFinite(bozukPara.para), true);
+  } finally {
+    Object.defineProperty(globalThis, 'window', {
+      configurable: true,
+      writable: true,
+      value: eskiWindow,
+    });
+  }
+});
+
+test('D3-Adım-4 sağlamlaştırma: bozuk aktifOlay/komşu kaydı ayıklama, zero-resource olay çıkışı ve kiraDongu=0 koruması', () => {
+  const temel = yeniOyunOlustur('Gölge');
+
+  // 1) Bozuk aktifOlay, aktifKomsuOlayi, sonBildirim, komsuAdimlari ve string dizileri migration sırasında ayıklanmalı
+  const bozukKayit = kaydiMigrateEt({
+    ...temel,
+    aktifOlay: { yanlis: true },
+    aktifKomsuOlayi: { id: 'x' },
+    sonBildirim: { metin: 123 },
+    komsuAdimlari: { riza: -3, nuri: Number.NaN, gecerli: 2.7 },
+    evEsyalari: ['yatak_ortopedik', 42, '', null],
+    gecmis: [{ gun: 1, metin: 'Tamam', tur: 'bilgi' }, { bozuk: true }],
+  });
+  assert.ok(bozukKayit);
+  assert.equal(bozukKayit.aktifOlay, null);
+  assert.equal(bozukKayit.aktifKomsuOlayi, null);
+  assert.equal(bozukKayit.sonBildirim, null);
+  assert.deepEqual(bozukKayit.komsuAdimlari, { gecerli: 2 });
+  assert.deepEqual(bozukKayit.evEsyalari, ['yatak_ortopedik']);
+  assert.equal(bozukKayit.gecmis.length, 1);
+
+  // 2) Tüm ev olayları (EV_OLAYLARI + AHLAKI_GRI_OLAYLAR) 0 TL ve 0 EN ile en az bir oynanabilir seçenek sunmalı
+  for (const olay of [...EV_OLAYLARI, ...AHLAKI_GRI_OLAYLAR]) {
+    const oynanabilirSecenek = olay.secenekler.find((s) => {
+      const p = s.minParaGerekli ?? (s.etkiler.para && s.etkiler.para < 0 ? Math.abs(s.etkiler.para) : 0);
+      const e = s.minEnerjiGerekli ?? (s.etkiler.enerji && s.etkiler.enerji < 0 ? Math.abs(s.etkiler.enerji) : 0);
+      return p === 0 && e === 0;
+    });
+    assert.ok(
+      oynanabilirSecenek,
+      `${olay.id} olayı 0 TL / 0 EN durumunda kilitlenmemeli`
+    );
+  }
+
+  // 3) komsuOlayiniKapat hikayeyi ilerletmeden pencereyi kapatmalı
+  const markette = mekanaGit({ ...temel, gun: 3 }, 'market');
+  const komsuAcik = komsuEtkilesimiBaslat(markette, 'bakkal_riza');
+  assert.ok(komsuAcik.aktifKomsuOlayi);
+  const komsuKapali = komsuOlayiniKapat(komsuAcik);
+  assert.equal(komsuKapali.aktifKomsuOlayi, null);
+  assert.equal(komsuKapali.komsuAdimlari['bakkal_riza'] ?? 0, 0);
+
+  // 4) kiraDonguGun = 0 ayarlansa bile NaN üretilmemeli
+  try {
+    dengeGuncelle('zaman.kiraDonguGun', 0);
+    const turetilmis = hesaplaTuretilmisDegerler(temel);
+    assert.equal(Number.isFinite(turetilmis.kirayaKalanGun), true);
+    const uykuSonrasi = evdeUyuVeGunuBitir(temel, () => 0.99);
+    assert.equal(Number.isFinite(uykuSonrasi.para), true);
+  } finally {
+    dengeSifirla();
+  }
+});
+
+test('D3-Adım-5 ev seviyesi 0 iken üst üste kira ödenemezse kapı kilitlenir ve borç ödenince açılır', () => {
+  dengeSifirla();
+  const baslangic = {
+    ...yeniOyunOlustur('Gölge', () => 0.99),
+    evSeviyesi: 0,
+    evEsyalari: ['kum_torbasi'],
+    gun: 7,
+    para: 100,
+    moral: 70,
+  };
+
+  // İlk kira kaçırma: uyarı alır, henüz kilitlenmez
+  const ilkUyari = evdeUyuVeGunuBitir(baslangic, () => 0.99);
+  assert.equal(ilkUyari.kiraUyariSayisi, 1);
+  assert.equal(ilkUyari.sokaktaKaliyor, false);
+
+  // İkinci üst üste kira kaçırma: ev seviyesi 0 olduğu için kapı kilitlenir, enerji toparlanması düşer
+  const kilitli = evdeUyuVeGunuBitir(
+    { ...ilkUyari, aktifOlay: null, gun: 14, para: 100 },
+    () => 0.99
+  );
+  assert.equal(kilitli.sokaktaKaliyor, true);
+  assert.equal(kilitli.kiraUyariSayisi, 2);
+  assert.equal(
+    kilitli.enerji,
+    VARSAYILAN_DENGE.ekonomiVeYasam.sokaktaEnerjiToparlanma
+  );
+  assert.equal(hesaplaTuretilmisDegerler(kilitli).evdeAntrenmanAcik, false);
+  assert.ok(
+    aktifDebufflariGetir(kilitli).some((d) => d.id === 'sokakta_kalma'),
+    'Sokakta kalma debuff rozeti görünmeli'
+  );
+
+  // Para biriktirip kiraBorcuOde çağrılınca kilit açılır ve eve dönülür
+  const odeme = kiraBorcuOde({
+    ...kilitli,
+    aktifOlay: null,
+    para: EV_SEVIYELERI[0].haftalikKira + 50,
+  });
+  assert.equal(odeme.sokaktaKaliyor, false);
+  assert.equal(odeme.kiraUyariSayisi, 0);
+  assert.equal(odeme.para, 50);
+  assert.equal(hesaplaTuretilmisDegerler(odeme).evdeAntrenmanAcik, true);
+});
+
+test('D3-Adım-5 100 simülasyonluk headless referans strateji denge testi', () => {
+  dengeSifirla();
+  const gercekDovusCoz = (
+    state: OyunDurumu,
+    rakip: (typeof RAKIP_LISTESI)[number],
+    rng: () => number
+  ) => {
+    let dovus = dovusBaslat(state, rakip);
+    let adim = 0;
+    let tepkiVerildi = false;
+    while (dovus.durum !== 'bitti' && adim < 1800) {
+      if (!dovus.rakip.hazirlananHamleId) tepkiVerildi = false;
+      if (
+        dovus.rakip.hazirlananHamleId &&
+        !tepkiVerildi &&
+        dovus.rakip.otomatikSayacMs <= 450
+      ) {
+        tepkiVerildi = true;
+        if (rng() < 0.3) {
+          if (
+            (dovus.oyuncu.beklemeSureleri['geri_cekil'] ?? 0) <= 0 &&
+            dovus.oyuncu.stamina >= 8 &&
+            rng() < 0.45
+          ) {
+            dovus = oyuncuHamleSec(dovus, 'geri_cekil');
+          } else if ((dovus.oyuncu.beklemeSureleri['blok'] ?? 0) <= 0) {
+            dovus = oyuncuHamleSec(dovus, 'blok');
+          }
+        }
+      }
+      dovus = dovusAdimi(dovus, 100, rng);
+      adim += 1;
+    }
+    return dovus.kazanan ?? 'berabere';
+  };
+
+  const rapor = referansStratejiSimuleEt(100, 10, gercekDovusCoz);
+
+  assert.equal(rapor.simulasyonSayisi, 100);
+  assert.equal(rapor.gunSayisi, 10);
+  assert.ok(
+    rapor.kiraOdeyenOrani >= 0.55 && rapor.kiraOdeyenOrani <= 0.9,
+    `10. günde kira ödeme oranı dengeli olmalı (hedef %55-%90, gerçekleşen: ${(rapor.kiraOdeyenOrani * 100).toFixed(1)}%)`
+  );
+  assert.ok(
+    rapor.kazanmaOrani >= 0.65 && rapor.kazanmaOrani <= 1.0,
+    `Kazanma oranı makul olmalı (gerçekleşen: ${(rapor.kazanmaOrani * 100).toFixed(1)}%)`
+  );
+  assert.ok(
+    rapor.ortalamaMacSayisi >= 7,
+    `Referans stratejide günde ~1 dövüş çıkmalı (ort: ${rapor.ortalamaMacSayisi})`
+  );
+  assert.ok(
+    rapor.ortalamaStatToplam >= 24,
+    `10 günde statlar gelişmeli (ort: ${rapor.ortalamaStatToplam})`
+  );
+  assert.ok(
+    Number.isFinite(rapor.ortalamaFinalPara) && rapor.ortalamaFinalPara >= 0,
+    'Final para sonlu ve negatif olmamalı'
+  );
+  assert.ok(rapor.ortalamaMoral >= 50, `Moral sağlıklı kalmalı (ort: ${rapor.ortalamaMoral})`);
+});
+
+
 
 

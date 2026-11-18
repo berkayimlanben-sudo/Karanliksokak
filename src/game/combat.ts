@@ -327,8 +327,9 @@ export function oyuncuHamleSec(dovus: DovusDurumu, hamleId: string): DovusDurumu
       ...o.beklemeSureleri,
       [hamle.id]: hamle.beklemeSuresiMs,
     };
+    const dDovus = DENGE.dovus;
     const blokTuruMu = (hamle.staminaToparlanma ?? 0) > 0;
-    const ekstraStamina = mukemmelZamanlama && blokTuruMu ? 8 : 0;
+    const ekstraStamina = mukemmelZamanlama && blokTuruMu ? dDovus.mukemmelBlokEkStamina : 0;
     const yeniStamina = sinirla(
       o.stamina - hamle.staminaMaliyeti + (hamle.staminaToparlanma ?? 0) + ekstraStamina,
       0,
@@ -337,7 +338,8 @@ export function oyuncuHamleSec(dovus: DovusDurumu, hamleId: string): DovusDurumu
 
     if (blokTuruMu) {
       const blokSure =
-        (hamle.id === 'celik_gard' ? 1050 : 900) + (mukemmelZamanlama ? 50 : 0);
+        (hamle.id === 'celik_gard' ? dDovus.blokCelikGardSureMs : dDovus.blokStandartSureMs) +
+        (mukemmelZamanlama ? dDovus.blokMukemmelEkSureMs : 0);
       return {
         ...dovus,
         sonOlayMetni: mukemmelZamanlama
@@ -348,10 +350,10 @@ export function oyuncuHamleSec(dovus: DovusDurumu, hamleId: string): DovusDurumu
           stamina: yeniStamina,
           blokKalanMs: blokSure,
           kacinmaKalanMs: 0,
-          mukemmelSavunmaKalanMs: mukemmelZamanlama ? 700 : 0,
+          mukemmelSavunmaKalanMs: mukemmelZamanlama ? dDovus.mukemmelBlokPencereMs : 0,
           aksiyon: 'blok',
-          aksiyonKalanMs: 650,
-          aksiyonToplamMs: 650,
+          aksiyonKalanMs: dDovus.aksiyonBlokMs,
+          aksiyonToplamMs: dDovus.aksiyonBlokMs,
           beklemeSureleri: yeniBeklemeler,
         },
       };
@@ -359,8 +361,12 @@ export function oyuncuHamleSec(dovus: DovusDurumu, hamleId: string): DovusDurumu
 
     // Geri Çekil, Eğil / Yana Kay veya Hayalet Adım
     const sure =
-      (hamle.id === 'hayalet_adim' ? 860 : hamle.id === 'egil_yana_kay' ? 800 : 720) +
-      (mukemmelZamanlama ? 100 : 0);
+      (hamle.id === 'hayalet_adim'
+        ? dDovus.kacinmaHayaletSureMs
+        : hamle.id === 'egil_yana_kay'
+          ? dDovus.kacinmaEgilSureMs
+          : dDovus.kacinmaGeriCekilSureMs) +
+      (mukemmelZamanlama ? dDovus.kacinmaMukemmelEkSureMs : 0);
     return {
       ...dovus,
       sonOlayMetni: mukemmelZamanlama
@@ -550,6 +556,8 @@ function saldiriCoz(
   komboTamamlandi: number;
   koOlduMu: boolean;
 } {
+  const dDovus = DENGE.dovus;
+  const gucSaldiriSure = dDovus.aksiyonSaldiriMs;
   const stamOran = saldiran.stamina / Math.max(1, saldiran.maksStamina);
   const staminaHarcama = Math.min(saldiran.stamina, hamle.staminaMaliyeti);
   const guncelSaldiran: DovuscuDurumu = {
@@ -558,8 +566,8 @@ function saldiriCoz(
     siraHamleId: null,
     hazirlananHamleId: null,
     aksiyon: hamle.tur === 'tekme' ? 'tekme' : 'yumruk',
-    aksiyonKalanMs: 360,
-    aksiyonToplamMs: 360,
+    aksiyonKalanMs: gucSaldiriSure,
+    aksiyonToplamMs: gucSaldiriSure,
     beklemeSureleri: {
       ...saldiran.beklemeSureleri,
       [hamle.id]: hamle.beklemeSuresiMs,
@@ -573,19 +581,19 @@ function saldiriCoz(
     const kacinmaSansi = mukemmelMi
       ? 100
       : sinirla(
-          64 +
-            savunan.statlar.refleks * 2.5 +
-            savunan.kacinmaBonusu * 0.35 +
+          dDovus.kacinmaTabanSans +
+            savunan.statlar.refleks * dDovus.kacinmaRefleksCarpan +
+            savunan.kacinmaBonusu * dDovus.kacinmaBonusCarpan +
             (savunan.pasifler?.kacinmaSansiBonusu ?? 0),
-          40,
-          96
+          dDovus.kacinmaMinSans,
+          dDovus.kacinmaMaxSans
         );
     if (mukemmelMi || rng() * 100 <= kacinmaSansi) {
-      const karsiPencere = mukemmelMi ? 2600 : 1800;
+      const karsiPencere = mukemmelMi ? dDovus.karsiPencereMukemmelMs : dDovus.karsiPencereStandartMs;
       const karsiCarpan =
         (mukemmelMi
-          ? DENGE.dovus.karsiSaldiriMukemmelCarpan
-          : DENGE.dovus.karsiSaldiriStandartCarpan) +
+          ? dDovus.karsiSaldiriMukemmelCarpan
+          : dDovus.karsiSaldiriStandartCarpan) +
         (savunan.pasifler?.karsiSaldiriCarpanBonusu ?? 0);
       return {
         saldiran: guncelSaldiran,
@@ -615,7 +623,7 @@ function saldiriCoz(
           ? `${savunan.lakap} Mükemmel Kaçınma yaptı! Sonraki karşı saldırı güçlendi!`
           : `${savunan.lakap} ${hamle.isim} hamlesinden sıyrıldı! Karşı saldırı fırsatı!`,
         sarsintiSiddeti: mukemmelMi ? 3 : 0,
-        hitstopMs: mukemmelMi ? 80 : 0,
+        hitstopMs: mukemmelMi ? dDovus.hitstopMukemmelMs : 0,
         komboTamamlandi: 0,
         koOlduMu: false,
       };
@@ -626,13 +634,13 @@ function saldiriCoz(
   const karsiAktif = guncelSaldiran.karsiSaldiriKalanMs > 0;
   const isabetSansi = sinirla(
     hamle.isabetSansi +
-      guncelSaldiran.statlar.ceviklik * 1.9 -
-      savunan.statlar.refleks * 1.5 +
+      guncelSaldiran.statlar.ceviklik * dDovus.isabetCeviklikCarpan -
+      savunan.statlar.refleks * dDovus.isabetRefleksCarpan +
       (guncelSaldiran.pasifler?.isabetBonusu ?? 0) +
-      (karsiAktif ? 18 : 0) -
-      (stamOran < DENGE.dovus.staminaRegenDusukOran ? 12 : 0),
-    30,
-    98
+      (karsiAktif ? dDovus.isabetKarsiBonusu : 0) -
+      (stamOran < dDovus.staminaRegenDusukOran ? dDovus.isabetDusukStaminaCezasi : 0),
+    dDovus.isabetMinSans,
+    dDovus.isabetMaxSans
   );
 
   if (rng() * 100 > isabetSansi) {
@@ -729,9 +737,9 @@ function saldiriCoz(
   const mukemmelBlokMu = bloktaMi && (savunan.mukemmelSavunmaKalanMs ?? 0) > 0;
   const blokKesintiBonusu = (savunan.pasifler?.blokKesintiYuzde ?? 0) / 100;
   const blokCarpani = mukemmelBlokMu
-    ? Math.max(0.08, 0.15 - blokKesintiBonusu * 0.5)
+    ? Math.max(dengeDovus.mukemmelBlokMinHasarCarpani, dengeDovus.mukemmelBlokHasarCarpani - blokKesintiBonusu * 0.5)
     : bloktaMi
-      ? Math.max(0.15, 0.35 - blokKesintiBonusu)
+      ? Math.max(dengeDovus.blokMinHasarCarpani, dengeDovus.blokHasarCarpani - blokKesintiBonusu)
       : 1.0;
   const rastgeleSapma = dengeDovus.rastgeleSapmaTaban + rng() * dengeDovus.rastgeleSapmaAralik;
 
@@ -743,7 +751,14 @@ function saldiriCoz(
     komboBonusCarpan *
     blokCarpani *
     rastgeleSapma;
-  const netHasar = Math.max(mukemmelBlokMu ? 1 : bloktaMi ? 2 : 4, Math.round(hamHasar));
+  const netHasar = Math.max(
+    mukemmelBlokMu
+      ? dengeDovus.minHasarMukemmelBlok
+      : bloktaMi
+        ? dengeDovus.minHasarBlok
+        : dengeDovus.minHasarNormal,
+    Math.round(hamHasar)
+  );
 
   const yeniCan = Math.max(0, savunan.can - netHasar);
   const koOlduMu = yeniCan <= 0;
@@ -764,13 +779,13 @@ function saldiriCoz(
   let hitstopMs = 0;
   if (!koOlduMu) {
     if (komboTamamlandi === 3) {
-      hitstopMs = 95;
+      hitstopMs = dengeDovus.hitstopKombo3Ms;
     } else if (komboTamamlandi === 2) {
-      hitstopMs = 85;
+      hitstopMs = dengeDovus.hitstopKombo2Ms;
     } else if (mukemmelBlokMu) {
-      hitstopMs = 80;
+      hitstopMs = dengeDovus.hitstopMukemmelMs;
     } else if (hamle.temelHasar >= dengeDovus.agirVurusHasarEsigi || karsiAktif) {
-      hitstopMs = 85;
+      hitstopMs = dengeDovus.hitstopAgirMs;
     }
   }
 
@@ -969,12 +984,12 @@ export function dovusAdimi(
   // 1. Oyuncunun otomatik veya öncelikli hamlesi
   if (oyuncu.otomatikSayacMs <= 0 && oyuncu.aksiyon !== 'darbe_aldi') {
     const hamle = otomatikSaldiriSec(oyuncu, rng);
-    if (oyuncu.stamina < hamle.staminaMaliyeti && oyuncu.stamina < 8) {
+    if (oyuncu.stamina < hamle.staminaMaliyeti && oyuncu.stamina < DENGE.dovus.bitkinStaminaEsigi) {
       // Çok bitkinse kısa bir nefes aralığı ver
       oyuncu = {
         ...oyuncu,
         siraHamleId: null,
-        otomatikSayacMs: 750,
+        otomatikSayacMs: DENGE.dovus.oyuncuBitkinBeklemeMs,
       };
     } else {
       const sonuc = saldiriCoz(oyuncu, rakip, hamle, sonrakiSayiId, rng);
@@ -1060,11 +1075,11 @@ export function dovusAdimi(
         };
         olayMetni = `${rakip.lakap} geri adımla mesafe açtı.`;
       }
-    } else if (rakip.stamina < rakipHamle.staminaMaliyeti && rakip.stamina < 8) {
+    } else if (rakip.stamina < rakipHamle.staminaMaliyeti && rakip.stamina < DENGE.dovus.bitkinStaminaEsigi) {
       rakip = {
         ...rakip,
         hazirlananHamleId: null,
-        otomatikSayacMs: 800,
+        otomatikSayacMs: DENGE.dovus.rakipBitkinBeklemeMs,
       };
     } else {
       const sonuc = saldiriCoz(rakip, oyuncu, rakipHamle, sonrakiSayiId, rng);

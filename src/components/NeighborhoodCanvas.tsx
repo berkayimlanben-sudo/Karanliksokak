@@ -23,6 +23,15 @@ import {
   pikselSpriteCiz,
   YATAK_SPRITE,
 } from '../game/pixelSprites';
+import {
+  hariciSpriteCiz,
+  hariciSpriteHazirMi,
+  hariciSpriteKaresiAl,
+  hedefEkranOlcegiHesapla,
+  spriteAtlasDinleyicisiniKaldir,
+  spriteAtlasOnYukle,
+  SpriteAksiyonId,
+} from '../game/spriteAtlas';
 import { KarakterGorunumu, MekanId, TEMA } from '../game/theme';
 
 const AKSIYON_SURESI = 1.25; // Vuruş / çalışma animasyon süresi (saniye)
@@ -679,7 +688,10 @@ export const NeighborhoodCanvas: React.FC<NeighborhoodCanvasProps> = ({
       const hedefX = Math.round(vw * s.karakterKonumX) - 8 * spriteOlcek;
       let keremX = hedefX;
       let keremY = zeminY + 3;
-      let keremSprite = Math.floor(elapsed * 1.8) % 2 === 0 ? KEREM_IDLE_0 : KEREM_IDLE_1;
+      const idleKareIndex = Math.floor(elapsed * 1.8) % 2;
+      let keremSprite = idleKareIndex === 0 ? KEREM_IDLE_0 : KEREM_IDLE_1;
+      let hariciAksiyon: SpriteAksiyonId = 'idle';
+      let hariciKareIndex = idleKareIndex;
 
       const keremPalet = keremPaletiOlustur(s.gorunum);
 
@@ -689,32 +701,44 @@ export const NeighborhoodCanvas: React.FC<NeighborhoodCanvasProps> = ({
         const yurumeKare = Math.floor(elapsed * 9) % 3;
         keremSprite =
           yurumeKare === 0 ? KEREM_WALK_0 : yurumeKare === 1 ? KEREM_WALK_1 : KEREM_WALK_2;
+        hariciAksiyon = 'walk';
+        hariciKareIndex = yurumeKare;
       } else if (s.aksiyonSuresi > 0 && !reducedMotion) {
         const t = 1 - s.aksiyonSuresi / AKSIYON_SURESI;
         if (s.aksiyonTuru === 'dayaniklilik') {
           const kare = Math.floor(elapsed * 11) % 3;
           keremSprite = kare === 0 ? KEREM_WALK_0 : kare === 1 ? KEREM_WALK_1 : KEREM_WALK_2;
           keremY -= Math.round(Math.abs(Math.sin(t * Math.PI * 6)) * 2);
+          hariciAksiyon = 'walk';
+          hariciKareIndex = kare;
         } else {
           const faz = (t * 4) % 1;
+          hariciAksiyon = 'punch';
           if (faz < 0.25) {
             keremSprite = KEREM_PUNCH_0;
             keremX -= 2;
+            hariciKareIndex = 0;
           } else if (faz < 0.68) {
             keremSprite = KEREM_PUNCH_1;
             keremX += 3;
+            hariciKareIndex = 1;
           } else {
             keremSprite = KEREM_PUNCH_2;
             keremX += 1;
+            hariciKareIndex = 2;
           }
         }
       }
 
-      // Zemin gölgesi
-      pCtx.fillStyle = 'rgba(0, 0, 0, 0.52)';
-      pCtx.fillRect(keremX + 2 * spriteOlcek, zeminY + 1, 12 * spriteOlcek, 3);
+      const hariciKare = hariciSpriteKaresiAl('kerem', hariciAksiyon, hariciKareIndex);
+      const hariciHazir = hariciKare ? hariciSpriteHazirMi(hariciKare) !== null : false;
 
-      pikselSpriteCiz(pCtx, keremSprite, keremPalet, keremX, keremY, spriteOlcek);
+      if (!hariciHazir) {
+        // Zemin gölgesi (eski piksel ızgarası yedeği)
+        pCtx.fillStyle = 'rgba(0, 0, 0, 0.52)';
+        pCtx.fillRect(keremX + 2 * spriteOlcek, zeminY + 1, 12 * spriteOlcek, 3);
+        pikselSpriteCiz(pCtx, keremSprite, keremPalet, keremX, keremY, spriteOlcek);
+      }
 
       if (s.aksiyonSuresi > 0 && s.aksiyonTuru !== 'dayaniklilik' && !reducedMotion) {
         const t = 1 - s.aksiyonSuresi / AKSIYON_SURESI;
@@ -736,15 +760,33 @@ export const NeighborhoodCanvas: React.FC<NeighborhoodCanvasProps> = ({
         pCtx.fillRect(mx, my, 1, 1);
       }
 
-      if (s.yolculukSuresi > YOLCULUK_SURESI - 0.22 && !reducedMotion) {
-        const alfa = (s.yolculukSuresi - (YOLCULUK_SURESI - 0.22)) / 0.22;
-        pCtx.fillStyle = `rgba(11, 14, 23, ${Math.min(0.85, alfa).toFixed(2)})`;
-        pCtx.fillRect(0, 0, vw, vh);
-      }
-
       ctx.imageSmoothingEnabled = false;
       ctx.clearRect(0, 0, displayW, displayH);
       ctx.drawImage(pixelCanvas, 0, 0, displayW, displayH);
+
+      if (hariciHazir && hariciKare) {
+        const olcekX = displayW / vw;
+        const olcekY = displayH / vh;
+        const hedefBoyPx = 22 * spriteOlcek * olcekY;
+        const maksBoyPx = Math.max(44, Math.round((zeminY - 10) * olcekY));
+        const ekranOlcegi = hedefEkranOlcegiHesapla(
+          hedefBoyPx,
+          hariciKare.icerikYuksekligi,
+          maksBoyPx
+        );
+        hariciSpriteCiz(ctx, hariciKare, {
+          merkezEkranX: (keremX + 8 * spriteOlcek) * olcekX,
+          zeminEkranY: (zeminY + 2) * olcekY,
+          ekranOlcegi,
+          golgeAlfa: 0.52,
+        });
+      }
+
+      if (s.yolculukSuresi > YOLCULUK_SURESI - 0.22 && !reducedMotion) {
+        const alfa = (s.yolculukSuresi - (YOLCULUK_SURESI - 0.22)) / 0.22;
+        ctx.fillStyle = `rgba(11, 14, 23, ${Math.min(0.85, alfa).toFixed(2)})`;
+        ctx.fillRect(0, 0, displayW, displayH);
+      }
 
       if (!reducedMotion) {
         rafId = requestAnimationFrame(ciz);
@@ -758,6 +800,14 @@ export const NeighborhoodCanvas: React.FC<NeighborhoodCanvasProps> = ({
       }
       rafId = requestAnimationFrame(ciz);
     };
+
+    const atlasYuklendi = () => {
+      stateRef.current.yenidenCiz = true;
+      if (reducedMotion) {
+        tekCizimRef.current?.();
+      }
+    };
+    spriteAtlasOnYukle(atlasYuklendi);
 
     const motionChangeDinle = (ev: MediaQueryListEvent) => {
       reducedMotion = ev.matches;
@@ -774,6 +824,7 @@ export const NeighborhoodCanvas: React.FC<NeighborhoodCanvasProps> = ({
 
     return () => {
       tekCizimRef.current = null;
+      spriteAtlasDinleyicisiniKaldir(atlasYuklendi);
       mediaQuery?.removeEventListener?.('change', motionChangeDinle);
       cancelAnimationFrame(rafId);
       ro.disconnect();

@@ -1,0 +1,36 @@
+{
+  "group_id": "4807205e-6887-49c7-90ec-b0366f1b8bc3",
+  "states": [
+    {
+      "character": {
+        "id": "61b752c3-7d06-4ec0-b506-508ab49feb91",
+        "name": "Idle",
+        "prompt": "\"2D pixel art, side-view fighting game character, 20-year-old lean college student, athletic V-taper build, broad shoulders but narrow waist, slim fit muscles (not bulky), slightly slouched casual posture. Wearing a dark charcoal tank top with dark grey highlights, not pure black, blue jeans, white sneakers. 32x48 resolution, retro arcade style, dark thick outline, 3-tone shading, single light source from top-left, limited color palette, transparent background, street fight atmosphere.\"",
+        "size": {
+          "width": 48,
+          "height": 48
+        },
+        "template_id": "mannequin",
+        "directions": 8,
+        "view": "low top-down",
+        "created_at": "2026-11-18T17:57:01.655133+00:00"
+      },
+      "folder": "Idle",
+      "frames": {
+        "rotations": {
+          "south": "Idle/rotations/south.png",
+          "south-east": "Idle/rotations/south-east.png",
+          "east": "Idle/rotations/east.png",
+          "north-east": "Idle/rotations/north-east.png",
+          "north": "Idle/rotations/north.png",
+          "north-west": "Idle/rotations/north-west.png",
+          "west": "Idle/rotations/west.png",
+          "south-west": "Idle/rotations/south-west.png"
+        },
+        "animations": {}
+      }
+    }
+  ],
+  "export_version": "3.1",
+  "export_date": "2026-11-18T17:59:48.710403"
+}

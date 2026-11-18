@@ -17,10 +17,30 @@ import {
   pikselSpriteCiz,
   PikselSprite,
 } from '../game/pixelSprites';
+import {
+  hariciSpriteCiz,
+  hariciSpriteHazirMi,
+  hariciSpriteKaresiAl,
+  HariciSpriteKaresi,
+  hedefEkranOlcegiHesapla,
+  spriteAtlasDinleyicisiniKaldir,
+  spriteAtlasOnYukle,
+  SpriteAksiyonId,
+} from '../game/spriteAtlas';
 import { hitStopAktifMi, reducedMotionAlgilandiMi } from '../game/effects';
 import { TEMA } from '../game/theme';
 
 const HAMLE_TURU_HARITASI = new Map(HAMLE_LISTESI.map((h) => [h.id, h.tur]));
+
+function hariciAksiyonCozumle(aksiyon: DovuscuDurumu['aksiyon'], can: number): SpriteAksiyonId {
+  if (aksiyon === 'ko' || can <= 0) return 'ko';
+  if (aksiyon === 'darbe_aldi') return 'hit';
+  if (aksiyon === 'blok') return 'block';
+  if (aksiyon === 'kacinma') return 'dodge';
+  if (aksiyon === 'yumruk') return 'punch';
+  if (aksiyon === 'tekme') return 'kick';
+  return 'idle';
+}
 
 interface ArenaCombatCanvasProps {
   dovusRef: React.RefObject<DovusDurumu>;
@@ -239,6 +259,12 @@ export const ArenaCombatCanvas: React.FC<ArenaCombatCanvasProps> = ({
       const d = dovusRef.current;
       pCtx.drawImage(bgCanvas, 0, 0);
 
+      let oyuncuHariciKare: HariciSpriteKaresi | null = null;
+      let oyuncuHariciHazir = false;
+      let oyuncuMerkezX = 0;
+      let oyuncuZeminY = 0;
+      let oyuncuOfsetX = 0;
+
       if (d) {
         const zeminY = vh - Math.max(18, Math.round(vh * 0.2));
         const merkezX = Math.round(vw * 0.5);
@@ -265,9 +291,19 @@ export const ArenaCombatCanvas: React.FC<ArenaCombatCanvasProps> = ({
         const oY = zeminY + 4;
         const rY = zeminY + 4;
 
+        const oyuncuAksiyon = hariciAksiyonCozumle(d.oyuncu.aksiyon, d.oyuncu.can);
+        const oyuncuKareIndex = Math.floor(animElapsed * 2.4) % 2;
+        oyuncuHariciKare = hariciSpriteKaresiAl('kerem', oyuncuAksiyon, oyuncuKareIndex);
+        oyuncuHariciHazir = oyuncuHariciKare ? hariciSpriteHazirMi(oyuncuHariciKare) !== null : false;
+        oyuncuMerkezX = oyuncuBaseX + 8 * spriteOlcek;
+        oyuncuZeminY = zeminY + 1;
+        oyuncuOfsetX = oyuncuPoz.ofsetX;
+
         // Zemin gölgeleri
         pCtx.fillStyle = 'rgba(0, 0, 0, 0.58)';
-        pCtx.fillRect(oX + 2 * spriteOlcek, zeminY + 1, 13 * spriteOlcek, 3);
+        if (!oyuncuHariciHazir) {
+          pCtx.fillRect(oX + 2 * spriteOlcek, zeminY + 1, 13 * spriteOlcek, 3);
+        }
         pCtx.fillRect(rX + 2 * spriteOlcek, zeminY + 1, 13 * spriteOlcek, 3);
 
         // Rakip saldırı hazırlığı (telgraf) yumruk parıltısı
@@ -279,17 +315,19 @@ export const ArenaCombatCanvas: React.FC<ArenaCombatCanvasProps> = ({
           pCtx.fillRect(rX - 2, zeminY - 17 * spriteOlcek, 4, 8 * spriteOlcek);
         }
 
-        // Oyuncu sprite (sağa bakar)
-        pikselSpriteCiz(
-          pCtx,
-          oyuncuPoz.sprite,
-          keremPaletiOlustur(d.oyuncu.gorunum),
-          oX,
-          oY,
-          spriteOlcek,
-          false,
-          d.oyuncu.darbeFlasMs > 0
-        );
+        // Oyuncu sprite (henüz harici PNG yoksa eski piksel ızgarasına düşer)
+        if (!oyuncuHariciHazir) {
+          pikselSpriteCiz(
+            pCtx,
+            oyuncuPoz.sprite,
+            keremPaletiOlustur(d.oyuncu.gorunum),
+            oX,
+            oY,
+            spriteOlcek,
+            false,
+            d.oyuncu.darbeFlasMs > 0
+          );
+        }
 
         // Rakip sprite (sola bakar)
         pikselSpriteCiz(
@@ -373,6 +411,27 @@ export const ArenaCombatCanvas: React.FC<ArenaCombatCanvasProps> = ({
       ctx.imageSmoothingEnabled = false;
       ctx.clearRect(0, 0, displayW, displayH);
       ctx.drawImage(pixelCanvas, 0, 0, displayW, displayH);
+
+      if (d && oyuncuHariciHazir && oyuncuHariciKare) {
+        const olcekX = displayW / vw;
+        const olcekY = displayH / vh;
+        const zeminEkranY = oyuncuZeminY * olcekY;
+        const hudAltSinirPx = 28 * olcekY;
+        const maksBoyPx = Math.max(44, Math.floor(zeminEkranY - hudAltSinirPx));
+        const ekranOlcegi = hedefEkranOlcegiHesapla(
+          21 * spriteOlcek * olcekY,
+          oyuncuHariciKare.icerikYuksekligi,
+          maksBoyPx
+        );
+        hariciSpriteCiz(ctx, oyuncuHariciKare, {
+          merkezEkranX: oyuncuMerkezX * olcekX,
+          zeminEkranY,
+          ekranOlcegi,
+          ekstraOfsetX: oyuncuOfsetX * olcekX,
+          beyazFlas: d.oyuncu.darbeFlasMs > 0,
+          golgeAlfa: 0.58,
+        });
+      }
 
       // Keskin metin katmanı: isimler, süre, yüzen hasar sayıları, KO mührü
       if (d) {
@@ -506,6 +565,11 @@ export const ArenaCombatCanvas: React.FC<ArenaCombatCanvasProps> = ({
       }
     };
 
+    const atlasYuklendi = () => {
+      hazirCizim?.();
+    };
+    spriteAtlasOnYukle(atlasYuklendi);
+
     const motionChangeDinle = (ev: MediaQueryListEvent) => {
       reducedMotion = ev.matches;
     };
@@ -514,6 +578,7 @@ export const ArenaCombatCanvas: React.FC<ArenaCombatCanvasProps> = ({
     rafId = requestAnimationFrame(ciz);
 
     return () => {
+      spriteAtlasDinleyicisiniKaldir(atlasYuklendi);
       mediaQuery?.removeEventListener?.('change', motionChangeDinle);
       cancelAnimationFrame(rafId);
       ro.disconnect();
